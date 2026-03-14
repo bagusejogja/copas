@@ -1,0 +1,349 @@
+"use client";
+import { useState, useEffect } from 'react';
+
+type ApprovalModal = { show: boolean; id: number | null; action: 'APPROVE' | 'REJECT' | null };
+type ViewModal = { show: boolean; proposal: any | null };
+
+export default function ApprovalsPage() {
+  const [proposals, setProposals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [modal, setModal] = useState<ApprovalModal>({ show: false, id: null, action: null });
+  const [viewModal, setViewModal] = useState<ViewModal>({ show: false, proposal: null });
+  const [catatan, setCatatan] = useState('');
+  const [nominalRevisi, setNominalRevisi] = useState<Record<number, string>>({});
+
+  useEffect(() => { fetchApprovals(); }, []);
+
+  const fetchApprovals = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/approvals');
+      const data = await res.json();
+      setProposals(Array.isArray(data) ? data : []);
+    } finally { setLoading(false); }
+  };
+
+  const openApproveModal = (p: any, action: 'APPROVE' | 'REJECT') => {
+    setCatatan('');
+    if (action === 'APPROVE') {
+      const pre: Record<number, string> = {};
+      p.details.forEach((d: any) => { pre[d.id] = String(d.nominal); });
+      setNominalRevisi(pre);
+    }
+    setModal({ show: true, id: p.id, action });
+  };
+
+  const handleConfirm = async () => {
+    if (!modal.id || !modal.action) return;
+    const id = modal.id;
+    const action = modal.action;
+    if (action === 'REJECT' && !catatan.trim()) { alert('Alasan penolakan wajib diisi!'); return; }
+    const proposal = proposals.find((p: any) => p.id === id);
+    let adjustedDetails = undefined;
+    if (action === 'APPROVE' && proposal) {
+      adjustedDetails = proposal.details.map((d: any) => ({
+        id: d.id, nominal: nominalRevisi[d.id] !== undefined ? Number(nominalRevisi[d.id]) : Number(d.nominal)
+      }));
+    }
+    setProcessingId(id);
+    setModal({ show: false, id: null, action: null });
+    try {
+      const res = await fetch('/api/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal_id: id, action, catatan, adjustedDetails })
+      });
+      if (res.ok) { fetchApprovals(); }
+      else { const err = await res.json(); alert('Gagal: ' + err.message); }
+    } finally { setProcessingId(null); }
+  };
+
+  const printProposal = (p: any) => {
+    const total = p.details.reduce((s: number, d: any) => s + Number(d.nominal), 0);
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<html><head><title>Proposal #USL-${String(p.id).padStart(4,'0')}</title>
+    <style>body{font-family:Arial,sans-serif;padding:40px;color:#222}table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{border:1px solid #ccc;padding:8px;font-size:12px}th{background:#f0f0f0}.header{text-align:center;margin-bottom:20px}
+    .kop{font-size:20px;font-weight:bold;color:#1a6b3b}.lbl{font-weight:bold;display:inline-block;width:160px}
+    .field{font-size:12px;margin:3px 0}.total{font-weight:bold;background:#e8f5e9}@media print{button{display:none}}</style>
+    </head><body><div class="header"><div class="kop">MUHAMMADIYAH</div><p style="font-size:12px;color:#555">FORMULIR PENGAJUAN USULAN ANGGARAN PROGRAM KERJA</p></div>
+    <p class="field"><span class="lbl">Nomor:</span>#USL-${String(p.id).padStart(4,'0')}</p>
+    <p class="field"><span class="lbl">Judul:</span>${p.judul}</p>
+    <p class="field"><span class="lbl">Pemohon:</span>${p.pemohon?.nama}</p>
+    <p class="field"><span class="lbl">Unit:</span>${p.unit?.nama_unit}</p>
+    <p class="field"><span class="lbl">Jenis:</span>${p.activity_type?.nama}</p>
+    ${p.latar_belakang?`<p class="field"><span class="lbl">Latar Belakang:</span>${p.latar_belakang}</p>`:''}
+    ${p.tujuan?`<p class="field"><span class="lbl">Tujuan:</span>${p.tujuan}</p>`:''}
+    <table><thead><tr><th>No</th><th>Deskripsi</th><th>Nominal</th></tr></thead><tbody>
+    ${p.details.map((d:any,i:number)=>`<tr><td>${i+1}</td><td>${d.deskripsi}</td><td style="text-align:right">Rp ${Number(d.nominal).toLocaleString('id-ID')}</td></tr>`).join('')}
+    <tr class="total"><td colspan="2" style="text-align:right">TOTAL</td><td style="text-align:right">Rp ${total.toLocaleString('id-ID')}</td></tr>
+    </tbody></table><script>window.print();</script></body></html>`);
+    win.document.close();
+  };
+
+  return (
+    <div className="p-6">
+      <div className="mb-6 border-b pb-4">
+        <h1 className="text-2xl font-bold text-gray-800">Persetujuan Usulan (Approval)</h1>
+        <p className="mt-1 text-gray-600 text-sm">Tinjau dan putuskan usulan anggaran yang membutuhkan persetujuan Anda.</p>
+      </div>
+
+      {/* ===== MODAL VIEW DETAIL ===== */}
+      {viewModal.show && viewModal.proposal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-muh-green-dark text-white rounded-t-2xl">
+              <div>
+                <p className="text-xs text-green-200 font-mono">#USL-{String(viewModal.proposal.id).padStart(4,'0')}</p>
+                <h2 className="text-lg font-bold">{viewModal.proposal.judul}</h2>
+              </div>
+              <button onClick={() => setViewModal({show:false,proposal:null})} className="text-white/80 hover:text-white text-2xl font-bold">✕</button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+              {/* Info Grid */}
+              <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                {[
+                  ['Jenis Kegiatan', viewModal.proposal.activity_type?.nama],
+                  ['Unit / Majelis', viewModal.proposal.unit?.nama_unit],
+                  ['Pemohon', viewModal.proposal.pemohon?.nama],
+                  ['Tanggal Pengajuan', new Date(viewModal.proposal.tanggal).toLocaleDateString('id-ID')],
+                  ['Waktu Pelaksanaan', viewModal.proposal.waktu_pelaksanaan ? new Date(viewModal.proposal.waktu_pelaksanaan).toLocaleDateString('id-ID') : '-'],
+                  ['Jumlah Peserta', viewModal.proposal.jumlah_peserta ? `${viewModal.proposal.jumlah_peserta} orang` : '-'],
+                  ['Bentuk Kegiatan', viewModal.proposal.bentuk_kegiatan || '-'],
+                  ['Kerjasama', viewModal.proposal.kerjasama || '-'],
+                ].map(([label, val]) => (
+                  <div key={label}>
+                    <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-0.5">{label}</p>
+                    <p className="text-sm font-medium text-gray-800">{val || '-'}</p>
+                  </div>
+                ))}
+              </div>
+              {viewModal.proposal.latar_belakang && (
+                <div><p className="text-xs text-gray-500 font-semibold uppercase mb-1">Latar Belakang</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-line bg-gray-50 p-3 rounded-lg">{viewModal.proposal.latar_belakang}</p></div>
+              )}
+              {viewModal.proposal.tujuan && (
+                <div><p className="text-xs text-gray-500 font-semibold uppercase mb-1">Tujuan Kegiatan</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-line bg-gray-50 p-3 rounded-lg">{viewModal.proposal.tujuan}</p></div>
+              )}
+
+              {/* Alur Persetujuan / Timeline */}
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase mb-3">Alur Persetujuan</p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-full bg-blue-100 border-2 border-blue-400 flex items-center justify-center flex-shrink-0">
+                      <span className="text-blue-600 text-xs">📄</span>
+                    </div>
+                    <div className="flex-1 pb-2 border-b border-gray-100">
+                      <p className="text-sm font-semibold text-gray-800">Pengajuan Dibuat</p>
+                      <p className="text-xs text-gray-500">oleh {viewModal.proposal.pemohon?.nama} · {new Date(viewModal.proposal.tanggal).toLocaleDateString('id-ID')}</p>
+                    </div>
+                  </div>
+                  {viewModal.proposal.approvals?.map((a: any) => (
+                    <div key={a.id} className="flex items-start gap-3">
+                      <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 text-xs ${a.status === 'APPROVE' ? 'bg-green-100 border-green-400 text-green-600' : 'bg-red-100 border-red-400 text-red-600'}`}>
+                        {a.status === 'APPROVE' ? '✓' : '✗'}
+                      </div>
+                      <div className="flex-1 pb-2 border-b border-gray-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-gray-800">{a.status === 'APPROVE' ? 'Disetujui' : 'Ditolak'}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${a.status === 'APPROVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>Level {a.level_approval}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">oleh <span className="font-semibold">{a.approver?.nama}</span> ({a.approver?.role?.nama_jabatan}) · {new Date(a.tanggal).toLocaleDateString('id-ID')}</p>
+                        {a.catatan && <p className="text-xs text-gray-600 mt-1 italic bg-gray-50 px-2 py-1 rounded">"{a.catatan}"</p>}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3">
+                    <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs ${viewModal.proposal.status_terakhir === 'APPROVED_FINAL' ? 'bg-green-200 border-green-500' : viewModal.proposal.status_terakhir === 'REJECTED' ? 'bg-red-200 border-red-500' : 'bg-yellow-100 border-yellow-400'}`}>
+                      {viewModal.proposal.status_terakhir === 'APPROVED_FINAL' ? '✅' : viewModal.proposal.status_terakhir === 'REJECTED' ? '✗' : '⏳'}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {viewModal.proposal.status_terakhir === 'APPROVED_FINAL' ? 'Final — Anggaran Siap Cair'
+                          : viewModal.proposal.status_terakhir === 'REJECTED' ? 'Ditolak'
+                          : 'Menunggu Persetujuan Berikutnya'}
+                      </p>
+                      <p className="text-xs text-gray-500">{viewModal.proposal.status_terakhir}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RAB Table */}
+              <div>
+                <p className="text-xs text-gray-500 font-semibold uppercase mb-2">Rincian Anggaran Biaya (RAB)</p>
+                <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                  <thead className="bg-gray-100 text-xs uppercase text-gray-600">
+                    <tr><th className="px-4 py-3 text-left">No</th><th className="px-4 py-3 text-left">Deskripsi</th><th className="px-4 py-3 text-right">Nominal (Rp)</th></tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {viewModal.proposal.details.map((d: any, i: number) => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-gray-500">{i+1}</td>
+                        <td className="px-4 py-2">{d.deskripsi}</td>
+                        <td className="px-4 py-2 text-right font-mono font-bold">Rp {Number(d.nominal).toLocaleString('id-ID')}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-muh-green/5 font-bold">
+                      <td colSpan={2} className="px-4 py-3 text-right text-sm">TOTAL</td>
+                      <td className="px-4 py-3 text-right font-mono text-base text-muh-green">
+                        Rp {viewModal.proposal.details.reduce((s: number, d: any) => s + Number(d.nominal), 0).toLocaleString('id-ID')}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t flex justify-end gap-3">
+              <button onClick={() => printProposal(viewModal.proposal)} className="bg-blue-50 text-blue-700 border border-blue-200 px-5 py-2 rounded-lg font-bold hover:bg-blue-100">🖨 PDF</button>
+              <button onClick={() => setViewModal({show:false,proposal:null})} className="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg font-bold hover:bg-gray-200">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL APPROVAL ===== */}
+      {modal.show && modal.id && (() => {
+        const p = proposals.find((x: any) => x.id === modal.id);
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
+              <div className={`px-6 py-4 rounded-t-2xl text-white ${modal.action === 'APPROVE' ? 'bg-green-600' : 'bg-red-600'}`}>
+                <h2 className="text-xl font-bold">{modal.action === 'APPROVE' ? '✓ Konfirmasi Persetujuan' : '✗ Konfirmasi Penolakan'}</h2>
+                <p className="text-sm text-white/80 mt-0.5">{p?.judul}</p>
+              </div>
+              <div className="p-6 space-y-5">
+                {modal.action === 'APPROVE' && p && (
+                  <div>
+                    <p className="text-sm font-bold text-gray-700 mb-3">Rincian Nominal — ubah kolom "Revisi" jika perlu:</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
+                        <thead className="bg-gray-100 text-gray-600 uppercase">
+                          <tr><th className="px-4 py-3 text-left">Deskripsi</th><th className="px-4 py-3 text-right">Nominal Diajukan (Rp)</th><th className="px-4 py-3 text-right min-w-[150px]">Nominal Revisi (Rp)</th></tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {p.details.map((d: any) => (
+                            <tr key={d.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-2">{d.deskripsi}</td>
+                              <td className="px-4 py-2 text-right font-mono text-gray-500 line-through">{Number(d.nominal).toLocaleString('id-ID')}</td>
+                              <td className="px-4 py-2">
+                                <input type="number" value={nominalRevisi[d.id] ?? d.nominal}
+                                  onChange={e => setNominalRevisi(prev => ({ ...prev, [d.id]: e.target.value }))}
+                                  className="w-full border border-blue-300 rounded p-1.5 text-right font-mono text-sm bg-blue-50" />
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="bg-gray-50 font-bold text-sm">
+                            <td className="px-4 py-2 text-right" colSpan={2}>Total Revisi:</td>
+                            <td className="px-4 py-2 text-right font-mono text-muh-green">
+                              Rp {Object.values(nominalRevisi).reduce((s, v) => s + (Number(v)||0), 0).toLocaleString('id-ID')}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">
+                    Catatan {modal.action === 'REJECT' ? <span className="text-red-500">*</span> : '(Opsional)'}
+                  </label>
+                  <textarea value={catatan} onChange={e => setCatatan(e.target.value)} rows={3}
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm"
+                    placeholder={modal.action === 'REJECT' ? 'Alasan penolakan wajib diisi...' : 'Catatan persetujuan...'} />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t flex gap-3 justify-end">
+                <button onClick={() => setModal({show:false,id:null,action:null})} className="px-5 py-2 border rounded-lg text-gray-700 hover:bg-gray-100">Batal</button>
+                <button onClick={handleConfirm}
+                  className={`px-7 py-2 rounded-lg font-bold text-white ${modal.action === 'APPROVE' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                  {modal.action === 'APPROVE' ? '✓ Setujui' : '✗ Tolak Usulan'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===== MAIN TABLE ===== */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">Memuat data...</div>
+        ) : proposals.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center">
+            <div className="bg-green-50 rounded-full p-5 mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <h3 className="text-lg font-bold text-gray-800">Antrean Bersih!</h3>
+            <p className="text-gray-500 text-sm mt-1">Tidak ada usulan yang menunggu persetujuan Anda saat ini.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-600">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+                <tr>
+                  <th className="px-5 py-4">No Usulan & Judul</th>
+                  <th className="px-5 py-4">Pemohon & Unit</th>
+                  <th className="px-5 py-4 text-right">Total Anggaran</th>
+                  <th className="px-5 py-4 text-center">Status</th>
+                  <th className="px-5 py-4 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {proposals.map((p: any) => {
+                  const total = p.details.reduce((s: number, d: any) => s + Number(d.nominal), 0);
+                  const isProcessing = processingId === p.id;
+                  return (
+                    <tr key={p.id} className="hover:bg-gray-50 transition">
+                      <td className="px-5 py-4">
+                        <span className="font-mono text-xs text-gray-400">#USL-{String(p.id).padStart(4,'0')}</span>
+                        <div className="font-bold text-gray-900 mt-1">{p.judul}</div>
+                        <div className="text-xs text-muh-green mt-0.5">{p.activity_type.nama}</div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-gray-800">{p.pemohon.nama}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{p.unit.nama_unit}</div>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="font-extrabold text-gray-900">Rp {total.toLocaleString('id-ID')}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{p.details.length} baris RAB</div>
+                      </td>
+                      <td className="px-5 py-4 text-center">
+                        <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-bold">{p.status_terakhir}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex flex-col gap-1.5 items-center min-w-[110px]">
+                          <button onClick={() => setViewModal({show:true, proposal:p})}
+                            className="w-full bg-gray-50 text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-100 text-xs">
+                            👁 Lihat Detail
+                          </button>
+                          <button onClick={() => openApproveModal(p, 'APPROVE')} disabled={isProcessing}
+                            className={`w-full bg-muh-green text-white px-3 py-1.5 rounded-lg font-bold hover:bg-muh-green-dark text-xs ${isProcessing ? 'opacity-50' : ''}`}>
+                            ✓ Setujui
+                          </button>
+                          <button onClick={() => openApproveModal(p, 'REJECT')} disabled={isProcessing}
+                            className={`w-full bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 text-xs ${isProcessing ? 'opacity-50' : ''}`}>
+                            ✗ Tolak
+                          </button>
+                          <button onClick={() => printProposal(p)}
+                            className="w-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 text-xs">
+                            🖨 PDF
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
