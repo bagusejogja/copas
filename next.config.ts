@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  swcMinify: false, // Matikan minifikasi berat agar hemat RAM
 };
 
 export default nextConfig;
