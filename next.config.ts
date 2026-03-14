@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "standalone",
+  experimental: {
+    // Use webpack for build instead of turbopack (cPanel symlink issue)
+  },
 };
 
 export default nextConfig;
