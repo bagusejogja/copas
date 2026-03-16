@@ -19,6 +19,7 @@ model Unit {
   expenseRefs    ExpenseReference[]
   activityTypes  ActivityType[]
   accounts       Account[]
+  paguRecords    UnitPagu[]
 }
 
 model Role {
@@ -41,6 +42,7 @@ model User {
   role_id  Int
   role     Role      @relation(fields: [role_id], references: [id])
   proposals     Proposal[]    @relation("Pemohon")
+  proposalsPaid Proposal[]    @relation("Bendahara")
   approvals     Approval[]
   prokerDibuat  ProgramKerja[] @relation("ProkerPembuat")
 }
@@ -92,6 +94,7 @@ model Account {
   unit        Unit?            @relation(fields: [unit_id], references: [id])
   is_active   Boolean          @default(true)
   details     ProposalDetail[]
+  pjDetails   PertanggungjawabanDetail[]
 }
 
 model Proposal {
@@ -105,10 +108,14 @@ model Proposal {
   activity_type_id Int
   activity_type    ActivityType     @relation(fields: [activity_type_id], references: [id])
   status_terakhir  String           @default("PENDING")
-  proker_id        Int?             // Link ke Program Kerja Tahunan
+  proker_id        Int?             
   proker           ProgramKerja?    @relation(fields: [proker_id], references: [id])
   
-  // Detail kegiatan
+  // Payment Info
+  tanggal_bayar    DateTime?
+  dibayar_oleh_id  Int?
+  dibayar_oleh     User?            @relation("Bendahara", fields: [dibayar_oleh_id], references: [id])
+  
   latar_belakang   String?          @db.Text
   tujuan           String?          @db.Text
   bentuk_kegiatan  String?          @db.Text
@@ -124,6 +131,19 @@ model Proposal {
   details          ProposalDetail[]
   approvals        Approval[]
   pertanggungjawabans Pertanggungjawaban[]
+  kasRecords       Kas[]
+}
+
+model Kas {
+  id               Int      @id @default(autoincrement())
+  tanggal          DateTime @default(now())
+  proposal_id      Int?     
+  proposal         Proposal? @relation(fields: [proposal_id], references: [id])
+  tipe             String   // "MASUK" atau "KELUAR"
+  kategori         String?  // Usulan Anggaran, Manual, Hibah, dll
+  deskripsi        String
+  nominal          Decimal  @db.Decimal(15, 2)
+  unit_id          Int?
 }
 
 model Pertanggungjawaban {
@@ -134,7 +154,24 @@ model Pertanggungjawaban {
   ringkasan        String   @db.Text
   total_realisasi  Decimal  @db.Decimal(15,2)
   file_laporan     String?
-  status           String   @default("SUBMITTED")
+  status           String   @default("SUBMITTED") // DRAFT, SUBMITTED
+  
+  // Penandatangan
+  nama_pembuat     String?
+  nama_bendahara   String?
+  nama_pimpinan    String?
+  
+  details          PertanggungjawabanDetail[]
+}
+
+model PertanggungjawabanDetail {
+  id                   Int                @id @default(autoincrement())
+  pj_id                Int
+  pj                   Pertanggungjawaban @relation(fields: [pj_id], references: [id], onDelete: Cascade)
+  account_id           Int
+  account              Account            @relation(fields: [account_id], references: [id])
+  keterangan           String             // Detail per item nota
+  nominal              Decimal            @db.Decimal(15, 2)
 }
 
 model ProposalDetail {
@@ -193,5 +230,24 @@ model ProgramKerja {
   dibuat_oleh          User      @relation("ProkerPembuat", fields: [dibuat_oleh_id], references: [id])
   proposals            Proposal[]
   createdAt            DateTime  @default(now())
+}
+
+model UnitPagu {
+  id        Int      @id @default(autoincrement())
+  unit_id   Int
+  unit      Unit     @relation(fields: [unit_id], references: [id])
+  tahun     Int
+  nominal   Decimal  @db.Decimal(15, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([unit_id, tahun])
+}
+
+model GlobalSetting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
 }
 

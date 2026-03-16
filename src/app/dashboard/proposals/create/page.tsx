@@ -100,18 +100,22 @@ function FormProposal() {
 
   const selectedProker = prokers.find(p => p.id === Number(prokerId));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSave = async (status: 'PENDING' | 'DRAFT') => {
     if (!user) { alert("User belum termuat..."); return; }
     
+    // Minimal validation for draft
+    if (!judul || !activityId) {
+      alert("Minimal Judul dan Jenis Kegiatan harus diisi!");
+      return;
+    }
+
     const totalRow = calculateTotal();
-    if (selectedProker && totalRow > selectedProker.remaining_budget) {
+    if (status === 'PENDING' && selectedProker && totalRow > selectedProker.remaining_budget) {
        alert(`Total RAB (Rp ${totalRow.toLocaleString()}) melebihi sisa anggaran Proker (Rp ${selectedProker.remaining_budget.toLocaleString()})`);
        return;
     }
 
     setLoading(true);
-
     try {
       const payload = {
         judul,
@@ -129,7 +133,8 @@ function FormProposal() {
         tanggal_selesai: tglSelesai,
         tempat,
         susunan_panitia: panitia,
-        details
+        details,
+        status_terakhir: status
       };
 
       const res = await fetch('/api/proposals', {
@@ -139,7 +144,7 @@ function FormProposal() {
       });
 
       if (res.ok) {
-        alert('Berhasil diajukan!');
+        alert(status === 'DRAFT' ? 'Draf berhasil disimpan!' : 'Usulan berhasil diajukan!');
         router.push('/dashboard/proposals');
       } else {
         const errorData = await res.json();
@@ -171,7 +176,7 @@ function FormProposal() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={(e) => { e.preventDefault(); onSave('PENDING'); }} className="space-y-8">
         {/* Visualisasi Alur Approval */}
         <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-around text-[10px] font-black uppercase tracking-wider text-gray-400">
            <div className="flex flex-col items-center gap-2 text-muh-green">
@@ -382,15 +387,30 @@ function FormProposal() {
         </div>
 
         {/* Submit */}
-        <div className="flex justify-between items-center pt-4 pb-20">
-            <p className="text-sm text-gray-500 font-medium">* Pastikan rincian biaya telah sesuai dengan rencana kegiatan.</p>
-            <button 
-              type="submit" 
-              disabled={loading || details.length === 0}
-              className={`bg-muh-green hover:bg-muh-green-dark text-white text-xl px-12 py-4 rounded-2xl font-black shadow-xl shadow-muh-green/20 transition transform hover:-translate-y-1 active:scale-95 ${loading ? 'opacity-70 cursor-wait' : ''}`}
-            >
-              {loading ? 'Sedang Memproses...' : '🚀 Ajukan Usulan Sekarang'}
-            </button>
+        <div className="flex justify-between items-center pt-6 pb-20 border-t mt-8">
+            <p className="text-sm text-gray-400 font-medium w-64 line-clamp-2">* Lampiran foto/dokumen bisa ditambahkan setelah draf disimpan.</p>
+            <div className="flex gap-4">
+               <button 
+                 type="button"
+                 disabled={loading}
+                 onClick={() => onSave('DRAFT')}
+                 className="px-8 py-4 rounded-2xl font-bold text-gray-500 hover:bg-gray-100 transition flex items-center gap-2 border border-gray-200"
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                 Simpan Draf
+               </button>
+               <button 
+                 type="button" 
+                 disabled={loading || details.length === 0}
+                 onClick={() => onSave('PENDING')}
+                 className={`bg-muh-green hover:bg-muh-green-dark text-white text-xl px-12 py-4 rounded-2xl font-black shadow-xl shadow-muh-green/20 transition transform hover:-translate-y-1 active:scale-95 flex items-center gap-3 ${loading ? 'opacity-70 cursor-wait' : ''}`}
+               >
+                 {loading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                 ) : '🚀'}
+                 {loading ? 'Memproses...' : 'Kirim Usulan'}
+               </button>
+            </div>
         </div>
       </form>
     </div>

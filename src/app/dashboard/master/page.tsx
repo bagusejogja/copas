@@ -16,6 +16,8 @@ export default function MasterDataPage() {
   const [data, setData] = useState<Record<TabKey, Item[]>>({ expense: [], activity: [], account: [], role: [] });
   const [units, setUnits] = useState<{id: number, nama_unit: string}[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [visibleTabs, setVisibleTabs] = useState<TabKey[]>(['expense', 'activity', 'account', 'role']);
 
   // Add form
   const [nama, setNama] = useState('');
@@ -52,7 +54,24 @@ export default function MasterDataPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { 
+    fetchAll(); 
+    const saved = localStorage.getItem('master_visible_tabs');
+    if (saved) setVisibleTabs(JSON.parse(saved));
+  }, []);
+
+  const toggleTabVisibility = (key: TabKey) => {
+    const newTabs = visibleTabs.includes(key) 
+      ? visibleTabs.filter(t => t !== key) 
+      : [...visibleTabs, key];
+    setVisibleTabs(newTabs);
+    localStorage.setItem('master_visible_tabs', JSON.stringify(newTabs));
+    // If current tab is hidden, switch to first visible
+    if (!newTabs.includes(activeTab)) {
+      const first = TABS.find(t => newTabs.includes(t.key));
+      if (first) setActiveTab(first.key);
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,14 +138,46 @@ export default function MasterDataPage() {
         <p className="mt-1 text-gray-600 text-sm">Kelola data referensi per unit dan status keaktifan untuk form pengajuan anggaran.</p>
       </div>
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => { setActiveTab(t.key); setErrorMsg(''); setNama(''); setNomor(''); setNamaAkun(''); setLevel(''); setUnitId(''); setEditItem(null); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition ${activeTab === t.key ? 'bg-muh-green text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
-            <span>{t.icon}</span> {t.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-1">
+        <div className="flex gap-2">
+          {TABS.filter(t => visibleTabs.includes(t.key)).map(t => (
+            <button key={t.key} onClick={() => { setActiveTab(t.key); setErrorMsg(''); setNama(''); setNomor(''); setNamaAkun(''); setLevel(''); setUnitId(''); setEditItem(null); }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition ${activeTab === t.key ? 'bg-muh-green text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+              <span>{t.icon}</span> {t.label}
+            </button>
+          ))}
+        </div>
+        
+        <button 
+          onClick={() => setShowSettings(!showSettings)}
+          className="p-2 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition ml-auto"
+          title="Atur Tampilan Tab"
+        >
+          ⚙️
+        </button>
       </div>
+
+      {/* Visibility Settings Dropdown/Modal */}
+      {showSettings && (
+        <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200 animate-in slide-in-from-top-2">
+          <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Atur Visibilitas Tab Referensi</p>
+          <div className="flex flex-wrap gap-4">
+            {TABS.map(t => (
+              <label key={t.key} className="flex items-center gap-2 cursor-pointer group">
+                <input 
+                  type="checkbox" 
+                  checked={visibleTabs.includes(t.key)} 
+                  onChange={() => toggleTabVisibility(t.key)}
+                  className="w-4 h-4 text-muh-green rounded border-gray-300 focus:ring-muh-green"
+                />
+                <span className={`text-sm font-medium transition ${visibleTabs.includes(t.key) ? 'text-gray-800' : 'text-gray-400'}`}>
+                  {t.icon} {t.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editItem && (

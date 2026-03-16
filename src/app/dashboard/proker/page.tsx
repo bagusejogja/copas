@@ -21,13 +21,47 @@ export default function ProkerPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [detailItem, setDetailItem] = useState<any | null>(null);
+  const [settings, setSettings] = useState<any>({});
+  const [user, setUser] = useState<any>(null);
 
   const fetchData = async () => {
     setLoading(true);
-    const res = await fetch(`/api/proker?tahun=${tahunFilter}`);
-    const d = await res.json();
-    setProkerList(Array.isArray(d) ? d : []);
-    setLoading(false);
+    try {
+      const [resPk, resSet, resMe] = await Promise.all([
+        fetch(`/api/proker?tahun=${tahunFilter}`),
+        fetch('/api/settings'),
+        fetch('/api/auth/me')
+      ]);
+      const dPk = await resPk.json();
+      const dSet = await resSet.json();
+      const dMe = await resMe.json();
+      
+      setProkerList(Array.isArray(dPk) ? dPk : []);
+      setSettings(dSet);
+      setUser(dMe);
+    } finally { setLoading(false); }
+  };
+
+  const isPeriodOpen = () => {
+    if (!user || user.role?.level >= 99) return true;
+    const now = new Date();
+    
+    // Check custom unit access first
+    const customStart = settings[`proker_start_date_${user.unit?.id}`];
+    const customEnd = settings[`proker_end_date_${user.unit?.id}`];
+    
+    if (customStart && customEnd) {
+      if (new Date(customStart) <= now && new Date(customEnd) >= now) return true;
+    }
+
+    // Fallback to global access
+    if (settings.proker_start_date && new Date(settings.proker_start_date) > now) return false;
+    if (settings.proker_end_date && new Date(settings.proker_end_date) < now) return false;
+    
+    // If no setting, it's open by default or closed? (usually closed if restricted)
+    if (!settings.proker_start_date && !settings.proker_end_date) return false;
+    
+    return true;
   };
 
   useEffect(() => { fetchData(); }, [tahunFilter]);
@@ -68,23 +102,57 @@ export default function ProkerPage() {
   };
 
   const getProkerStats = (pk: any) => {
-    const details = pk.proposals?.flatMap((p: any) => p.details) || [];
-    const totalDiajukan = details.reduce((s: number, d: any) => s + Number(d.nominal), 0);
+    const proposals = pk.proposals || [];
     
-    const approvedProposals = pk.proposals?.filter((p: any) => p.status_terakhir === 'APPROVED_FINAL') || [];
+    // 1. Pengajuan: Total nominal usulan yang aktif (bukan Draft/Rejected)
+    const activeProposals = proposals.filter((p: any) => !['DRAFT', 'REJECTED'].includes(p.status_terakhir));
+    const totalPengajuan = activeProposals.reduce((s: number, p: any) => 
+      s + p.details.reduce((ss: number, d: any) => ss + Number(d.nominal), 0), 0
+    );
+
+    // 2. Disetujui: Sudah disetujui sampai tahap bendahara (APPROVED_FINAL or PAID)
+    const approvedProposals = proposals.filter((p: any) => ['APPROVED_FINAL', 'PAID'].includes(p.status_terakhir));
     const totalDisetujui = approvedProposals.reduce((s: number, p: any) => 
       s + p.details.reduce((ss: number, d: any) => ss + Number(d.nominal), 0), 0
     );
 
-    const totalDilaporkan = pk.proposals?.reduce((s: number, p: any) => 
-      s + (p.pertanggungjawabans?.reduce((ss: number, lpj: any) => ss + Number(lpj.total_realisasi), 0) || 0), 0
+    // 3. Diambil: Uang sudah cair (PAID)
+    const takenProposals = proposals.filter((p: any) => p.status_terakhir === 'PAID');
+    const totalDiambil = takenProposals.reduce((s: number, p: any) => 
+      s + p.details.reduce((ss: number, d: any) => ss + Number(d.nominal), 0), 0
+    );
+
+    // 4. Dilaporkan (SPJ): Total realisasi dari SPJ (yang sudah disetujui bendahara)
+    const totalDilaporkan = proposals.reduce((s: number, p: any) => 
+      s + (p.pertanggungjawabans?.filter((lpj: any) => lpj.status === 'APPROVED_FINAL').reduce((ss: number, lpj: any) => ss + Number(lpj.total_realisasi), 0) || 0), 0
     ) || 0;
 
-    const anggaran = Number(pk.anggaran_setahun);
-    const sisa = anggaran - totalDisetujui;
-    const pct = anggaran > 0 ? Math.min(100, Math.round(totalDisetujui / anggaran * 100)) : 0;
+    const sisaDana = totalDiambil - totalDilaporkan; // Sisa yang belum dispjkan
+    const anggaranPlan = Number(pk.anggaran_setahun);
+    const pct = anggaranPlan > 0 ? Math.min(100, Math.round(totalDisetujui / anggaranPlan * 100)) : 0;
+
+    const currentPaguRecord = pk.unit?.paguRecords?.find((r: any) => r.tahun === Number(tahunFilter));
+    const paguUnit = currentPaguRecord ? Number(currentPaguRecord.nominal) : 0;
+
+    return { 
+      anggaranPlan, totalPengajuan, totalDisetujui, totalDiambil, totalDilaporkan, 
+      sisaDana, pct, paguUnit, jumlahProposal: proposals.length 
+    };
+  };
+
+  const getGlobalUnitStats = () => {
+    // Total anggaran agreed for all prokers in this year
+    const totalAnggaran = prokerList.reduce((sum, pk) => sum + Number(pk.anggaran_setahun), 0);
     
-    return { totalDisetujui, totalDiajukan, totalDilaporkan, sisa, pct, jumlahProposal: pk.proposals?.length || 0 };
+    // Get unit info from prokerList[0] (admin view) or user.unit (unit view)
+    const unit = prokerList.length > 0 ? prokerList[0].unit : user?.unit;
+    const currentPaguRecord = unit?.paguRecords?.find((r: any) => r.tahun === Number(tahunFilter));
+    const paguUnit = currentPaguRecord ? Number(currentPaguRecord.nominal) : 0;
+    
+    const sisaPagu = paguUnit - totalAnggaran;
+    const usagePct = paguUnit > 0 ? Math.min(100, Math.round((totalAnggaran / paguUnit) * 100)) : 0;
+
+    return { totalAnggaran, paguUnit, sisaPagu, usagePct, unitName: unit?.nama_unit };
   };
 
   return (
@@ -210,9 +278,9 @@ export default function ProkerPage() {
                         <div className={`h-3 rounded-full transition-all ${stats.pct >= 90 ? 'bg-red-500' : stats.pct >= 60 ? 'bg-yellow-500' : 'bg-muh-green'}`} style={{width:`${stats.pct}%`}}></div>
                       </div>
                       <div className="grid grid-cols-3 gap-3 text-center">
-                        <div><p className="text-xs text-gray-500">Anggaran</p><p className="font-mono font-bold text-sm">{fmt(Number(detailItem.anggaran_setahun))}</p></div>
+                        <div><p className="text-xs text-gray-500">Anggaran</p><p className="font-mono font-bold text-sm">{fmt(stats.anggaranPlan)}</p></div>
                         <div><p className="text-xs text-gray-500">Telah Disetujui</p><p className="font-mono font-bold text-sm text-green-700">{fmt(stats.totalDisetujui)}</p></div>
-                        <div><p className="text-xs text-gray-500">Sisa</p><p className={`font-mono font-bold text-sm ${stats.sisa < 0 ? 'text-red-600' : 'text-blue-700'}`}>{fmt(stats.sisa)}</p></div>
+                        <div><p className="text-xs text-gray-500">Sisa Kas Unit</p><p className={`font-mono font-bold text-sm ${stats.sisaDana < 0 ? 'text-red-600' : 'text-blue-700'}`}>{fmt(stats.sisaDana)}</p></div>
                       </div>
                     </div>
                     {detailItem.uraian_kegiatan && <div><p className="text-xs text-gray-500 font-semibold uppercase mb-1">Uraian Kegiatan</p><p className="text-sm whitespace-pre-line bg-gray-50 p-3 rounded-lg">{detailItem.uraian_kegiatan}</p></div>}
@@ -248,12 +316,53 @@ export default function ProkerPage() {
           <select value={tahunFilter} onChange={e => setTahunFilter(e.target.value)} className="border border-gray-300 rounded-lg p-2 text-sm bg-white font-semibold">
             {TAHUN_LIST.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <button onClick={() => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true); }}
-            className="bg-muh-green text-white font-bold px-5 py-2 rounded-lg hover:bg-muh-green-dark shadow-md">
-            + Tambah Program
-          </button>
+          {isPeriodOpen() && (
+            <button onClick={() => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true); }}
+              className="bg-muh-green text-white font-bold px-5 py-2 rounded-lg hover:bg-muh-green-dark shadow-md">
+              + Tambah Program
+            </button>
+          )}
+          {!isPeriodOpen() && (
+             <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-xs font-black border border-red-100 italic">
+                🔒 Periode Ditutup
+             </div>
+          )}
         </div>
       </div>
+
+      {/* Unit Budget Summary */}
+      {!loading && (user?.unit || prokerList.length > 0) && (() => {
+        const gStats = getGlobalUnitStats();
+        return (
+          <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+             <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-gray-50 flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-xl">🏛️</div>
+                <div>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Pagu {tahunFilter}</p>
+                   <p className="text-xl font-black text-gray-900">{fmt(gStats.paguUnit)}</p>
+                   <p className="text-[9px] text-gray-400 font-bold truncate max-w-[150px]">{gStats.unitName}</p>
+                </div>
+             </div>
+             <div className="bg-white p-6 rounded-2xl shadow-sm border-2 border-gray-50 flex items-center gap-4">
+                <div className="w-12 h-12 bg-muh-green/10 text-muh-green rounded-xl flex items-center justify-center text-xl">📊</div>
+                <div>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Digunakan Proker</p>
+                   <p className="text-xl font-black text-muh-green">{fmt(gStats.totalAnggaran)}</p>
+                   <div className="mt-2 w-32 bg-gray-100 rounded-full h-1.5">
+                      <div className={`h-1.5 rounded-full ${gStats.usagePct >= 90 ? 'bg-red-500' : 'bg-muh-green'}`} style={{width: `${gStats.usagePct}%`}}></div>
+                   </div>
+                </div>
+             </div>
+             <div className={`p-6 rounded-2xl shadow-sm border-2 flex items-center gap-4 ${gStats.sisaPagu < 0 ? 'bg-red-50 border-red-100' : 'bg-gray-900 border-gray-800 text-white'}`}>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${gStats.sisaPagu < 0 ? 'bg-red-100 text-red-600' : 'bg-white/10 text-white'}`}>💰</div>
+                <div>
+                   <p className={`text-[10px] font-black uppercase tracking-widest ${gStats.sisaPagu < 0 ? 'text-red-400' : 'text-white/50'}`}>Sisa Pagu Belum Terbagi</p>
+                   <p className={`text-xl font-black ${gStats.sisaPagu < 0 ? 'text-red-700' : 'text-white'}`}>{fmt(gStats.sisaPagu)}</p>
+                </div>
+             </div>
+          </div>
+        );
+      })()}
 
       {loading ? <div className="p-10 text-center text-gray-500">Memuat...</div> :
         prokerList.length === 0 ? (
@@ -263,72 +372,71 @@ export default function ProkerPage() {
             <p className="text-gray-500 text-sm mt-1">Klik "+ Tambah Program" untuk memulai perencanaan.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
-            {prokerList.map(pk => {
-              const stats = getProkerStats(pk);
-              return (
-                <div key={pk.id} className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden flex flex-col ${pk.is_active ? 'border-gray-200' : 'border-gray-100 opacity-70'}`}>
-                  <div className="p-4 flex-1">
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pk.sifat_kegiatan === 'Pokok' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
-                          {pk.sifat_kegiatan}
-                        </span>
-                        <span className="ml-2 text-xs text-gray-400 font-mono">{pk.periode_tahun}</span>
-                      </div>
-                      {!pk.is_active && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Nonaktif</span>}
-                    </div>
-                    <h3 className="font-bold text-gray-900 leading-snug mb-1">{pk.nama_kegiatan}</h3>
-                    <p className="text-xs text-gray-500 mb-3">{pk.unit?.nama_unit}</p>
-                    {pk.tanggal_mulai && <p className="text-xs text-gray-500 mb-3">
-                      📅 {new Date(pk.tanggal_mulai).toLocaleDateString('id-ID')} – {pk.tanggal_selesai ? new Date(pk.tanggal_selesai).toLocaleDateString('id-ID') : '?'}
-                    </p>}
-                    {/* Progress bar */}
-                    <div className="space-y-1.5 mb-3">
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span>Terserap {stats.pct}%</span>
-                        <span>{stats.jumlahProposal} usulan</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2">
-                        <div className={`h-2 rounded-full ${stats.pct >= 90 ? 'bg-red-500' : stats.pct >= 60 ? 'bg-yellow-500' : 'bg-muh-green'}`} style={{width:`${stats.pct}%`}}></div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-[10px] mb-2">
-                       <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center">
-                          <p className="text-gray-400 uppercase font-bold">Anggaran</p>
-                          <p className="font-mono font-black text-gray-700">{fmt(Number(pk.anggaran_setahun))}</p>
-                       </div>
-                       <div className="bg-muh-green/5 rounded-lg p-2 flex flex-col items-center">
-                          <p className="text-muh-green uppercase font-bold">Disetujui</p>
-                          <p className="font-mono font-black text-muh-green">{fmt(stats.totalDisetujui)}</p>
-                       </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5 text-[9px]">
-                      <div className="bg-gray-50 rounded-md p-1.5 text-center">
-                         <p className="text-gray-400">Pengajuan</p>
-                         <p className="font-mono font-bold text-gray-500">{fmt(stats.totalDiajukan)}</p>
-                      </div>
-                      <div className="bg-blue-50 rounded-md p-1.5 text-center">
-                         <p className="text-blue-400">Dilaporkan</p>
-                         <p className="font-mono font-bold text-blue-600">{fmt(stats.totalDilaporkan)}</p>
-                      </div>
-                      <div className={`rounded-md p-1.5 text-center ${stats.sisa < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
-                         <p className={stats.sisa < 0 ? 'text-red-400' : 'text-gray-400'}>Sisa</p>
-                         <p className={`font-mono font-bold ${stats.sisa < 0 ? 'text-red-600' : 'text-gray-700'}`}>{fmt(stats.sisa)}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-4 py-3 border-t bg-gray-50 flex flex-wrap gap-2">
-                    <button onClick={() => setDetailItem(pk)} className="flex-1 min-w-[80px] text-[10px] font-bold text-blue-700 border border-blue-200 bg-blue-50 px-2 py-1.5 rounded-lg hover:bg-blue-100">👁 Detail</button>
-                    <button onClick={() => openEdit(pk)} className="flex-1 min-w-[80px] text-[10px] font-bold text-yellow-700 border border-yellow-200 bg-yellow-50 px-2 py-1.5 rounded-lg hover:bg-yellow-100">✏ Edit</button>
-                    <Link href={`/dashboard/proposals/create?proker_id=${pk.id}`} className="flex-1 min-w-[100px] text-[10px] font-bold text-white bg-muh-green px-2 py-1.5 rounded-lg hover:bg-muh-green-dark text-center flex items-center justify-center">
-                      📝 Buat Usulan
-                    </Link>
-                    <button onClick={() => handleDelete(pk.id)} className="flex-1 min-w-[80px] text-[10px] font-bold text-red-600 border border-red-200 bg-red-50 px-2 py-1.5 rounded-lg hover:bg-red-100">🗑 Hapus</button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-100 overflow-hidden">
+             <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                   <thead className="bg-gray-50 border-b-2 border-gray-100 text-[10px] uppercase font-black text-gray-400">
+                      <tr>
+                         <th className="px-6 py-4">Nama Program & Unit</th>
+                         <th className="px-6 py-4 text-right">Anggaran</th>
+                         <th className="px-6 py-4 text-right">Pengajuan</th>
+                         <th className="px-6 py-4 text-right">Disetujui</th>
+                         <th className="px-6 py-4 text-right">Diambil</th>
+                         <th className="px-6 py-4 text-right">Dilaporkan (SPJ)</th>
+                         <th className="px-6 py-4 text-right">Sisa Dana</th>
+                         <th className="px-6 py-4 text-center">Aksi</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-gray-50">
+                      {prokerList.map(pk => {
+                         const stats = getProkerStats(pk);
+                         return (
+                            <tr key={pk.id} className={`group hover:bg-gray-50/50 transition-all ${!pk.is_active ? 'opacity-60 bg-gray-50' : ''}`}>
+                               <td className="px-6 py-4">
+                                  <p className="font-bold text-gray-900 leading-tight">{pk.nama_kegiatan}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                     <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${pk.sifat_kegiatan === 'Pokok' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                                       {pk.sifat_kegiatan}
+                                     </span>
+                                     <span className="text-[10px] text-gray-400 font-medium">{pk.unit?.nama_unit}</span>
+                                  </div>
+                               </td>
+                               <td className="px-6 py-4 text-right font-mono font-bold text-gray-700">
+                                  {fmt(stats.anggaranPlan)}
+                               </td>
+                               <td className="px-6 py-4 text-right font-mono font-bold text-gray-400">
+                                  {fmt(stats.totalPengajuan)}
+                               </td>
+                               <td className="px-6 py-4 text-right font-mono font-bold text-indigo-600">
+                                  {fmt(stats.totalDisetujui)}
+                               </td>
+                               <td className="px-6 py-4 text-right font-mono font-bold text-emerald-600">
+                                  {fmt(stats.totalDiambil)}
+                               </td>
+                               <td className="px-6 py-4 text-right font-mono font-bold text-blue-600">
+                                  {fmt(stats.totalDilaporkan)}
+                               </td>
+                               <td className={`px-6 py-4 text-right font-mono font-bold ${stats.sisaDana < 0 ? 'text-red-600 animate-pulse' : 'text-gray-900'}`}>
+                                  {fmt(stats.sisaDana)}
+                               </td>
+                               <td className="px-6 py-4">
+                                  <div className="flex items-center justify-center gap-1">
+                                     <button onClick={() => setDetailItem(pk)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Detail">👁</button>
+                                     {isPeriodOpen() && (
+                                       <>
+                                         <button onClick={() => openEdit(pk)} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition" title="Edit">✏</button>
+                                         <button onClick={() => handleDelete(pk.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition" title="Hapus">🗑</button>
+                                       </>
+                                     )}
+                                     <Link href={`/dashboard/proposals/create?proker_id=${pk.id}`} className="p-2 text-muh-green hover:bg-muh-green/10 rounded-lg transition" title="Buat Usulan">📝</Link>
+                                  </div>
+                               </td>
+                            </tr>
+                         );
+                      })}
+                   </tbody>
+                </table>
+             </div>
           </div>
         )
       }

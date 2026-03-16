@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
       where: { unit_id: unit_id ? Number(unit_id) : -1, is_active: true },
       include: {
         proposals: {
+           where: {
+             NOT: {
+               status_terakhir: { in: ['DRAFT', 'REJECTED'] }
+             }
+           },
            include: { details: true }
         }
       }
@@ -35,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   // Transform prokers to include current usage
   const prokersWithBudget = prokers.map(p => {
-    const used = p.proposals.reduce((sum, prop) => {
+    const used = (p.proposals || []).reduce((sum, prop) => {
       return sum + prop.details.reduce((s, d) => s + Number(d.nominal), 0);
     }, 0);
     return {

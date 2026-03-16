@@ -20,23 +20,27 @@ export async function GET() {
 
     // Role check
     const isPusat = !payload || (payload.role && payload.role.level === 99) || (payload.unit && payload.unit.id === 1);
-    const whereClause = isPusat ? {} : { unit_id: payload?.unit?.id };
+    
+    // Filters
+    const prokerWhere = isPusat ? {} : { unit_id: payload?.unit?.id };
+    const proposalWhere = isPusat ? { NOT: { status_terakhir: 'DRAFT' } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: 'DRAFT' } };
     const unitFilter = isPusat ? {} : { id: payload?.unit?.id };
 
-    console.log("Fetching dashboard stats...", { isPusat, whereClause });
+    console.log("Fetching dashboard stats...", { isPusat, proposalWhere });
 
     // Stats with safety
-    const [totalUsulan, pendingUsulan, approvedFinal, totalUsers, units] = await Promise.all([
-      prisma.proposal.count({ where: whereClause }).catch(() => 0),
-      prisma.proposal.count({ where: { ...whereClause, status_terakhir: 'PENDING' } }).catch(() => 0),
-      prisma.proposal.count({ where: { ...whereClause, status_terakhir: 'APPROVED_FINAL' } }).catch(() => 0),
+    const [totalUsulanCount, pendingUsulanCount, approvedFinalCount, paidUsulanCount, totalUsers, units, allProposals, allProkerBudgets]: any[] = await Promise.all([
+      prisma.proposal.count({ where: proposalWhere }).catch(() => 0),
+      prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: 'PENDING' } }).catch(() => 0),
+      prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: 'APPROVED_FINAL' } }).catch(() => 0),
+      prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: 'PAID' } }).catch(() => 0),
       prisma.user.count().catch(() => 0),
       prisma.unit.findMany({
         where: unitFilter,
         include: {
           _count: { select: { proposals: true } },
           proposals: {
-            where: isPusat ? {} : { unit_id: payload?.unit?.id },
+            where: isPusat ? { NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } },
             select: {
               status_terakhir: true,
               details: { select: { nominal: true } },
@@ -46,8 +50,35 @@ export async function GET() {
         },
         orderBy: { id: 'asc' },
         take: 20
-      }).catch(() => [])
+      }).catch(() => []),
+      prisma.proposal.findMany({
+        where: proposalWhere,
+        select: {
+          status_terakhir: true,
+          details: { select: { nominal: true } }
+        }
+      }).catch(() => []),
+      prisma.programKerja.aggregate({
+        where: prokerWhere,
+        _sum: { anggaran_setahun: true }
+      }).catch(() => ({ _sum: { anggaran_setahun: 0 } }))
     ]);
+
+    const totalAnggaranSetahun = Number(allProkerBudgets._sum?.anggaran_setahun || 0);
+
+    // Calculate totals in IDR
+    let totalNominalDiajukan = 0;
+    let totalNominalPending = 0;
+    let totalNominalFinal = 0;
+    let totalNominalPaid = 0;
+
+    allProposals.forEach((p: any) => {
+      const nominal = (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0);
+      totalNominalDiajukan += nominal;
+      if (p.status_terakhir === 'PENDING') totalNominalPending += nominal;
+      if (p.status_terakhir === 'APPROVED_FINAL') totalNominalFinal += nominal;
+      if (p.status_terakhir === 'PAID') totalNominalPaid += nominal;
+    });
 
     console.log("Processing unit summary...");
     const unitSummary = (units || []).map((u: any) => {
@@ -82,9 +113,12 @@ export async function GET() {
 
     console.log("Fetching proker data...");
     const prokerData = await prisma.programKerja.findMany({
-      where: whereClause,
+      where: prokerWhere,
       include: {
         proposals: {
+          where: {
+            NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } }
+          },
           include: { 
              details: true,
              pertanggungjawabans: true 
@@ -122,7 +156,7 @@ export async function GET() {
     });
 
     const recentProposals = await prisma.proposal.findMany({
-      where: whereClause,
+      where: proposalWhere,
       orderBy: { id: 'desc' },
       take: 6,
       include: { activity_type: true, unit: true }
@@ -130,7 +164,18 @@ export async function GET() {
 
     console.log("Dashboard API Success");
     return NextResponse.json({
-      stats: { totalUsulan, pendingUsulan, approvedFinal, totalUsers },
+      stats: { 
+        totalUsulan: totalUsulanCount, 
+        pendingUsulan: pendingUsulanCount, 
+        approvedFinal: approvedFinalCount, 
+        paidUsulan: paidUsulanCount,
+        totalUsers,
+        totalNominalDiajukan,
+        totalNominalPending,
+        totalNominalFinal,
+        totalNominalPaid,
+        totalAnggaranSetahun
+      },
       unitSummary,
       prokerSummary,
       recentProposals

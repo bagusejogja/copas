@@ -23,13 +23,16 @@ export async function GET(req: NextRequest) {
     const prokerList = await prisma.programKerja.findMany({
       where: whereClause,
       include: {
-        unit: true,
+        unit: {
+          include: { paguRecords: true }
+        },
         dibuat_oleh: { include: { role: true } },
         proposals: {
           select: {
             id: true,
             status_terakhir: true,
-            details: { select: { nominal: true } }
+            details: { select: { nominal: true } },
+            pertanggungjawabans: true
           }
         }
       },
@@ -51,36 +54,47 @@ export async function POST(req: NextRequest) {
     const payload: any = await verifyToken(token);
 
     const body = await req.json();
+    const tahun = Number(body.periode_tahun);
+    const unitId = payload.unit.id;
 
-    // Otomatis masukkan ke Master Data Referensi (ActivityType) jika belum ada
-    await prisma.activityType.upsert({
-      where: { id: -1 }, // Harusnya pake unique constraint (nama, unit_id), tapi schema belum ada unique di situ
-      // Karena belum ada unique constraint, kita check manual
-      create: {
-        nama: body.nama_kegiatan,
-        unit_id: payload.unit.id,
-        is_active: true
-      },
-      update: {}
-    });
-    // Alternatif: find first then create
-    const existingType = await prisma.activityType.findFirst({
-      where: { nama: body.nama_kegiatan, unit_id: payload.unit.id }
-    });
-    let activityTypeId;
-    if (!existingType) {
-      const newType = await prisma.activityType.create({
-        data: { nama: body.nama_kegiatan, unit_id: payload.unit.id, is_active: true }
-      });
-      activityTypeId = newType.id;
-    } else {
-      activityTypeId = existingType.id;
+    // 1. Validation: Timeframe (skip for Admin level 99)
+    if (payload.role.level < 99) {
+      const settings = await prisma.globalSetting.findMany();
+      const sMap = settings.reduce((acc: any, s) => { acc[s.key] = s.value; return acc; }, {});
+      const now = new Date();
+      if (sMap.proker_start_date && new Date(sMap.proker_start_date) > now) {
+         return NextResponse.json({ message: 'Periode pengisian belum dibuka' }, { status: 403 });
+      }
+      if (sMap.proker_end_date && new Date(sMap.proker_end_date) < now) {
+         return NextResponse.json({ message: 'Periode pengisian sudah ditutup' }, { status: 403 });
+      }
     }
 
+    // 2. Validation: Pagu
+    const pagu = await prisma.unitPagu.findUnique({
+      where: { unit_id_tahun: { unit_id: unitId, tahun } }
+    });
+    if (!pagu) {
+      return NextResponse.json({ message: `Pagu anggaran unit untuk tahun ${tahun} belum ditetapkan oleh pusat.` }, { status: 400 });
+    }
+
+    const existingProkers = await prisma.programKerja.findMany({
+      where: { unit_id: unitId, periode_tahun: tahun, is_active: true }
+    });
+    const totalExisting = existingProkers.reduce((sum, p) => sum + Number(p.anggaran_setahun), 0);
+    const newTotal = totalExisting + Number(body.anggaran_setahun);
+
+    if (newTotal > Number(pagu.nominal)) {
+      return NextResponse.json({ 
+        message: `Batas Pagu Terlampaui! Sisa pagu Bapak: Rp ${(Number(pagu.nominal) - totalExisting).toLocaleString('id-ID')}. Total yang diajukan: Rp ${Number(body.anggaran_setahun).toLocaleString('id-ID')}` 
+      }, { status: 400 });
+    }
+
+    // Proker creation logic...
     const proker = await prisma.programKerja.create({
       data: {
-        unit_id: payload.unit.id,
-        periode_tahun: Number(body.periode_tahun),
+        unit_id: unitId,
+        periode_tahun: tahun,
         nama_kegiatan: body.nama_kegiatan,
         sifat_kegiatan: body.sifat_kegiatan,
         uraian_kegiatan: body.uraian_kegiatan || null,
@@ -96,6 +110,13 @@ export async function POST(req: NextRequest) {
         dibuat_oleh_id: payload.id,
       }
     });
+
+    // Ensure ActivityType exists
+    const exists = await prisma.activityType.findFirst({ where: { nama: body.nama_kegiatan, unit_id: unitId } });
+    if (!exists) {
+      await prisma.activityType.create({ data: { nama: body.nama_kegiatan, unit_id: unitId } });
+    }
+
     return NextResponse.json(proker, { status: 201 });
   } catch (err) {
     console.error(err);
@@ -105,8 +126,30 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('token')?.value;
+    if (!token) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    const payload: any = await verifyToken(token);
+
     const body = await req.json();
     const { id, ...data } = body;
+    const unitId = payload.unit.id;
+    const tahun = Number(data.periode_tahun);
+
+    // Re-validate Pagu on Update
+    const pagu = await prisma.unitPagu.findUnique({
+      where: { unit_id_tahun: { unit_id: unitId, tahun } }
+    });
+    if (pagu) {
+      const otherProkers = await prisma.programKerja.findMany({
+        where: { unit_id: unitId, periode_tahun: tahun, is_active: true, id: { not: Number(id) } }
+      });
+      const totalOthers = otherProkers.reduce((sum, p) => sum + Number(p.anggaran_setahun), 0);
+      if (totalOthers + Number(data.anggaran_setahun) > Number(pagu.nominal)) {
+        return NextResponse.json({ message: 'Update gagal! Total anggaran melebihi Pagu.' }, { status: 400 });
+      }
+    }
+
     const proker = await prisma.programKerja.update({
       where: { id: Number(id) },
       data: {

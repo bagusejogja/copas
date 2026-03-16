@@ -3,7 +3,18 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 type DashData = {
-  stats: { totalUsulan: number; pendingUsulan: number; approvedFinal: number; totalUsers: number };
+  stats: { 
+    totalUsulan: number; 
+    pendingUsulan: number; 
+    approvedFinal: number; 
+    paidUsulan: number;
+    totalUsers: number;
+    totalNominalDiajukan: number;
+    totalNominalPending: number;
+    totalNominalFinal: number;
+    totalNominalPaid: number;
+    totalAnggaranSetahun: number;
+  };
   unitSummary: { id: number; nama_unit: string; diajukan: number; disetujui: number; totalAnggaran: number; totalDisetujui: number; totalSPJ: number }[];
   prokerSummary: { id: number; nama_kegiatan: string; anggaran: number; diajukan: number; disetujui: number; diambil: number; dilaporkan: number; sisa: number }[];
   recentProposals: any[];
@@ -12,11 +23,18 @@ type DashData = {
 export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unitsInfo, setUnitsInfo] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/dashboard')
-      .then(res => res.json())
-      .then(d => { setData(d); setLoading(false); })
+    Promise.all([
+      fetch('/api/dashboard').then(res => res.json()),
+      fetch('/api/pagu').then(res => res.json())
+    ])
+      .then(([dash, pagu]) => {
+        setData(dash);
+        setUnitsInfo(pagu);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
@@ -60,7 +78,8 @@ export default function DashboardPage() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-blue-100 text-sm font-medium">Total Usulan</p>
-              <p className="text-4xl font-black mt-2">{data?.stats.totalUsulan ?? 0}</p>
+              <p className="text-4xl font-black mt-1">{data?.stats.totalUsulan ?? 0}</p>
+              <p className="text-xs text-blue-100/80 font-mono mt-1">Rp {fmt(data?.stats.totalNominalDiajukan ?? 0)}</p>
             </div>
             <div className="bg-white/20 p-3 rounded-xl">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -73,7 +92,8 @@ export default function DashboardPage() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-yellow-100 text-sm font-medium">Menunggu Persetujuan</p>
-              <p className="text-4xl font-black mt-2">{data?.stats.pendingUsulan ?? 0}</p>
+              <p className="text-4xl font-black mt-1">{data?.stats.pendingUsulan ?? 0}</p>
+              <p className="text-xs text-yellow-100/80 font-mono mt-1">Rp {fmt(data?.stats.totalNominalPending ?? 0)}</p>
             </div>
             <div className="bg-white/20 p-3 rounded-xl">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -86,7 +106,8 @@ export default function DashboardPage() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-green-100 text-sm font-medium">Usulan Final / Cair</p>
-              <p className="text-4xl font-black mt-2">{data?.stats.approvedFinal ?? 0}</p>
+              <p className="text-4xl font-black mt-1">{data?.stats.approvedFinal ?? 0}</p>
+              <p className="text-xs text-green-100/80 font-mono mt-1">Rp {fmt(data?.stats.totalNominalFinal ?? 0)}</p>
             </div>
             <div className="bg-white/20 p-3 rounded-xl">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg>
@@ -95,17 +116,87 @@ export default function DashboardPage() {
           <Link href="/dashboard/pertanggungjawaban" className="mt-3 block text-green-100 text-xs hover:text-white">Buat LPJ →</Link>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white p-5 rounded-2xl shadow-lg">
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-5 rounded-2xl shadow-lg">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-purple-100 text-sm font-medium">Total Pengguna</p>
-              <p className="text-4xl font-black mt-2">{data?.stats.totalUsers ?? 0}</p>
+              <p className="text-indigo-100 text-sm font-medium">Sudah Dibayarkan</p>
+              <p className="text-4xl font-black mt-1">{data?.stats.paidUsulan ?? 0}</p>
+              <p className="text-xs text-indigo-100/80 font-mono mt-1">Rp {fmt(data?.stats.totalNominalPaid ?? 0)}</p>
             </div>
             <div className="bg-white/20 p-3 rounded-xl">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87M16 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 0 00-2-2H9a2 2 0 00-2 2v6a2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
             </div>
           </div>
-          <Link href="/dashboard/users" className="mt-3 block text-purple-100 text-xs hover:text-white">Kelola pengguna →</Link>
+          <Link href="/dashboard/kas" className="mt-3 block text-indigo-100 text-xs hover:text-white">Buku Kas Rekap →</Link>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl shadow-md border border-gray-100 flex flex-col justify-between">
+            <div>
+              <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Realisasi Tahun Ini</p>
+              <p className="text-2xl font-black text-muh-green mt-1">
+                 {data?.stats.totalAnggaranSetahun ? ((data.stats.totalNominalPaid / data.stats.totalAnggaranSetahun) * 100).toFixed(1) : 0}%
+              </p>
+              <div className="w-full bg-gray-100 rounded-full h-2 mt-2">
+                 <div className="bg-muh-green h-2 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, (data?.stats.totalNominalPaid || 0) / (data?.stats.totalAnggaranSetahun || 1) * 100)}%` }}></div>
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2 italic">Pagu: Rp {fmt(data?.stats.totalAnggaranSetahun ?? 0)}</p>
+        </div>
+      </div>
+
+      {/* Budget Progress Bar */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 overflow-hidden relative">
+        <div className="absolute top-0 right-0 p-3 opacity-[0.03] pointer-events-none">
+           <svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
+        </div>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
+           <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-2 h-2 bg-muh-green rounded-full animate-pulse"></span>
+                Realisasi Anggaran Terkonsolidasi
+              </p>
+              <h2 className="text-2xl font-black text-gray-900 mt-1">
+                Rp {fmt(data?.stats.totalNominalFinal ?? 0)} 
+                <span className="text-gray-300 text-lg font-normal mx-2">/</span>
+                <span className="text-gray-400 text-lg font-normal">Rp {fmt(data?.stats.totalAnggaranSetahun ?? 0)}</span>
+              </h2>
+           </div>
+           <div className="text-right bg-muh-green/5 px-4 py-2 rounded-xl border border-muh-green/10">
+              <p className="text-[10px] font-bold text-muh-green uppercase">Sudah Terserap</p>
+              <span className="text-3xl font-black text-muh-green">
+                {((data?.stats.totalNominalFinal ?? 0) / (data?.stats.totalAnggaranSetahun ?? 1) * 100).toFixed(1)}%
+              </span>
+           </div>
+        </div>
+        
+        <div className="relative w-full bg-gray-100 h-6 rounded-2xl overflow-hidden shadow-inner flex">
+           {/* Progress Sudah Cair */}
+           <div 
+             className="bg-gradient-to-r from-muh-green to-emerald-500 h-full transition-all duration-1000 relative group" 
+             style={{ width: `${Math.min(100, (data?.stats.totalNominalFinal ?? 0) / (data?.stats.totalAnggaranSetahun ?? 1) * 100)}%` }}
+           >
+              <div className="absolute inset-0 bg-white/20 animate-pulse-slow"></div>
+           </div>
+           {/* Progress Pending */}
+           <div 
+             className="bg-yellow-400/40 h-full border-l border-white/20 transition-all duration-1000" 
+             style={{ width: `${Math.min(100, (data?.stats.totalNominalPending ?? 0) / (data?.stats.totalAnggaranSetahun ?? 1) * 100)}%` }}
+           ></div>
+        </div>
+
+        <div className="flex flex-wrap gap-6 mt-4 text-[10px] font-bold">
+           <div className="flex items-center gap-2">
+              <span className="w-3 h-3 bg-gradient-to-br from-muh-green to-emerald-500 rounded-sm shadow-sm"></span> 
+              <span className="text-gray-600 uppercase">SUDAH CAIR (FINAL) <span className="text-gray-400 ml-1">Rp {fmt(data?.stats.totalNominalFinal ?? 0)}</span></span>
+           </div>
+           <div className="flex items-center gap-2">
+              <span className="w-3 h-3 bg-yellow-400/40 rounded-sm shadow-sm"></span> 
+              <span className="text-gray-600 uppercase">DALAM PROSES (PENDING) <span className="text-gray-400 ml-1">Rp {fmt(data?.stats.totalNominalPending ?? 0)}</span></span>
+           </div>
+           <div className="flex items-center gap-2 ml-auto">
+              <span className="w-3 h-3 bg-gray-100 rounded-sm"></span> 
+              <span className="text-gray-400 uppercase">SISA ANGGARAN <span className="text-gray-500 ml-1">Rp {fmt((data?.stats.totalAnggaranSetahun ?? 0) - (data?.stats.totalNominalFinal ?? 0))}</span></span>
+           </div>
         </div>
       </div>
 
@@ -166,34 +257,49 @@ export default function DashboardPage() {
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr>
                     <th className="px-4 py-3 text-left">Unit / Majelis</th>
-                    <th className="px-4 py-3 text-center">Diajukan</th>
-                    <th className="px-4 py-3 text-center">Disetujui</th>
-                    <th className="px-4 py-3 text-right">Total Diajukan (Rp)</th>
-                    <th className="px-4 py-3 text-right">Total Disetujui (Rp)</th>
+                    <th className="px-4 py-3 text-center">Usulan</th>
+                    <th className="px-4 py-3 text-right">Pagu Tahun Ini (Rp)</th>
+                    <th className="px-4 py-3 text-right">Realisasi (Rp)</th>
                     <th className="px-4 py-3 text-right">Total SPJ (Rp)</th>
+                    <th className="px-4 py-3 text-center">Serapan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {data?.unitSummary.map((u: any) => (
-                    <tr key={u.id} className="hover:bg-gray-50/70 transition">
-                      <td className="px-4 py-3 font-semibold text-gray-800">{u.nama_unit}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{u.diajukan}</span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="bg-green-50 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">{u.disetujui}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-xs text-gray-600">
-                        Rp {u.totalAnggaran.toLocaleString('id-ID')}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-xs font-bold text-muh-green">
-                        Rp {u.totalDisetujui.toLocaleString('id-ID')}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-xs font-bold text-blue-600">
-                        Rp {(u.totalSPJ || 0).toLocaleString('id-ID')}
-                      </td>
-                    </tr>
-                  ))}
+                  {data?.unitSummary.map((u: any) => {
+                    const paguData = Array.isArray(unitsInfo) 
+                      ? unitsInfo.find(ui => ui.id === u.id)?.paguRecords.find((r: any) => r.tahun === new Date().getFullYear())
+                      : null;
+                    const paguNominal = paguData ? Number(paguData.nominal) : 0;
+                    const pct = paguNominal > 0 ? (u.totalDisetujui / paguNominal) * 100 : 0;
+
+                    return (
+                      <tr key={u.id} className="hover:bg-gray-50/70 transition">
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-gray-800">{u.nama_unit}</p>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{u.diajukan} Pengajuan</span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                          {paguNominal > 0 ? fmt(paguNominal) : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-xs font-bold text-muh-green">
+                          {fmt(u.totalDisetujui)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-xs font-bold text-blue-600">
+                          {fmt(u.totalSPJ || 0)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center gap-2 justify-end">
+                            <span className={`text-[10px] font-bold ${pct > 90 ? 'text-red-500' : 'text-gray-400'}`}>{pct.toFixed(0)}%</span>
+                            <div className="w-16 bg-gray-100 h-1 rounded-full overflow-hidden">
+                              <div className={`h-full ${pct > 90 ? 'bg-red-500' : 'bg-muh-green'}`} style={{ width: `${Math.min(100, pct)}%` }}></div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

@@ -33,8 +33,10 @@ export async function POST(req: NextRequest) {
       unit_id, pemohon_id, judul, activity_type_id, details,
       latar_belakang, tujuan, bentuk_kegiatan, jumlah_peserta, 
       kerjasama, peralatan, tanggal_mulai, tanggal_selesai, tempat, 
-      susunan_panitia, proker_id
+      susunan_panitia, proker_id, status_terakhir
     } = body;
+
+    const targetStatus = status_terakhir || 'PENDING';
 
     if (!judul || !activity_type_id || !details || details.length === 0) {
       return NextResponse.json({ message: 'Isian form belum lengkap!' }, { status: 400 });
@@ -42,22 +44,27 @@ export async function POST(req: NextRequest) {
 
     const totalNominal = details.reduce((sum: number, d: any) => sum + (Number(d.nominal) || 0), 0);
 
-    // Validasi Anggaran Proker jika ada link ke Proker
-    if (proker_id) {
+    // Validasi Anggaran Proker jika ada link ke Proker & Status bukan Draft
+    if (proker_id && targetStatus !== 'DRAFT') {
       const proker = await prisma.programKerja.findUnique({
         where: { id: Number(proker_id) },
-        include: { proposals: { include: { details: true } } }
+        include: { 
+          proposals: { 
+            where: { NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } },
+            include: { details: true } 
+          } 
+        }
       });
 
       if (!proker) {
           return NextResponse.json({ message: 'Program Kerja tidak ditemukan' }, { status: 404 });
       }
 
-      const alreadyUsed = proker.proposals.reduce((sum: number, p: any) => sum + p.details.reduce((s: number, det: any) => s + Number(det.nominal), 0), 0);
+      const alreadyUsed = (proker.proposals || []).reduce((sum: number, p: any) => sum + p.details.reduce((s: number, det: any) => s + Number(det.nominal), 0), 0);
       const remaining = Number(proker.anggaran_setahun) - alreadyUsed;
 
       if (totalNominal > remaining) {
-          return NextResponse.json({ message: `Anggaran tidak mencukupi. Sisa anggaran Proker: Rp ${remaining.toLocaleString('id-ID')}` }, { status: 400 });
+          return NextResponse.json({ message: `Anggaran tidak mencukupi (Sisa: Rp ${remaining.toLocaleString('id-ID')}).` }, { status: 400 });
       }
     }
 
@@ -67,7 +74,7 @@ export async function POST(req: NextRequest) {
         pemohon_id: Number(pemohon_id),
         judul,
         activity_type_id: Number(activity_type_id),
-        status_terakhir: 'PENDING',
+        status_terakhir: targetStatus,
         proker_id: proker_id ? Number(proker_id) : null,
         latar_belakang,
         tujuan,
@@ -90,7 +97,24 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    return NextResponse.json({ message: 'Usulan berhasil diajukan!', proposal }, { status: 201 });
+    // 3. Auto-advance status jika pembuat adalah langkah pertama alur approval
+    if (targetStatus === 'PENDING') {
+      const flows = await prisma.approvalFlow.findMany({
+        where: { is_active: true },
+        orderBy: { urutan: 'asc' }
+      });
+      const payload: any = await verifyToken(req.cookies.get('token')?.value || '');
+      if (flows.length > 0 && flows[0].role_id === payload.role.id) {
+         // Leap to next status immediately
+         const nextLabel = flows.length > 1 ? `APPROVED_STEP_${flows[0].id}` : 'APPROVED_FINAL';
+         await prisma.proposal.update({
+            where: { id: proposal.id },
+            data: { status_terakhir: nextLabel }
+         });
+      }
+    }
+
+    return NextResponse.json({ message: targetStatus === 'DRAFT' ? 'Berhasil disimpan sebagai Draf!' : 'Usulan berhasil diajukan!', proposal }, { status: 201 });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ message: 'Error creating proposal' }, { status: 500 });

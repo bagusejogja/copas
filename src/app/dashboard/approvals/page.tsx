@@ -12,8 +12,20 @@ export default function ApprovalsPage() {
   const [viewModal, setViewModal] = useState<ViewModal>({ show: false, proposal: null });
   const [catatan, setCatatan] = useState('');
   const [nominalRevisi, setNominalRevisi] = useState<Record<number, string>>({});
+  const [user, setUser] = useState<any>(null);
+  const [paymentModal, setPaymentModal] = useState<any>(null);
+  const [isPaying, setIsPaying] = useState(false);
 
-  useEffect(() => { fetchApprovals(); }, []);
+  useEffect(() => { 
+    fetchApprovals(); 
+    fetchUser();
+  }, []);
+
+  const fetchUser = async () => {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+    setUser(data);
+  };
 
   const fetchApprovals = async () => {
     setLoading(true);
@@ -57,6 +69,26 @@ export default function ApprovalsPage() {
       if (res.ok) { fetchApprovals(); }
       else { const err = await res.json(); alert('Gagal: ' + err.message); }
     } finally { setProcessingId(null); }
+  };
+
+  const handlePay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentModal) return;
+    const formData = new FormData(e.target as HTMLFormElement);
+    const payload = {
+      tanggal_bayar: formData.get('tanggal_bayar'),
+      deskripsi: formData.get('deskripsi')
+    };
+    setIsPaying(true);
+    try {
+      const res = await fetch(`/api/proposals/${paymentModal.id}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) { alert("Pembayaran berhasil dikonfirmasi!"); setPaymentModal(null); fetchApprovals(); }
+      else { const d = await res.json(); alert("Gagal: " + d.message); }
+    } finally { setIsPaying(false); }
   };
 
   const printProposal = (p: any) => {
@@ -153,7 +185,7 @@ export default function ApprovalsPage() {
                           <p className="text-sm font-semibold text-gray-800">{a.status === 'APPROVE' ? 'Disetujui' : 'Ditolak'}</p>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${a.status === 'APPROVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>Level {a.level_approval}</span>
                         </div>
-                        <p className="text-xs text-gray-500">oleh <span className="font-semibold">{a.approver?.nama}</span> ({a.approver?.role?.nama_jabatan}) · {new Date(a.tanggal).toLocaleDateString('id-ID')}</p>
+                        <p className="text-xs text-gray-500">oleh <span className="font-semibold">{a.approver?.nama}</span> ({a.approver?.role?.nama_jabatan}) · {new Date(a.tanggal).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                         {a.catatan && <p className="text-xs text-gray-600 mt-1 italic bg-gray-50 px-2 py-1 rounded">"{a.catatan}"</p>}
                       </div>
                     </div>
@@ -199,9 +231,31 @@ export default function ApprovalsPage() {
                 </table>
               </div>
             </div>
-            <div className="px-6 py-4 border-t flex justify-end gap-3">
-              <button onClick={() => printProposal(viewModal.proposal)} className="bg-blue-50 text-blue-700 border border-blue-200 px-5 py-2 rounded-lg font-bold hover:bg-blue-100">🖨 PDF</button>
-              <button onClick={() => setViewModal({show:false,proposal:null})} className="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg font-bold hover:bg-gray-200">Tutup</button>
+            <div className="px-6 py-4 border-t flex justify-end gap-3 bg-gray-50">
+              <button 
+                onClick={() => printProposal(viewModal.proposal)} 
+                className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg font-bold hover:bg-blue-100 flex items-center gap-2"
+              >
+                🖨 PDF
+              </button>
+              <button 
+                onClick={() => { setViewModal({show:false, proposal:null}); openApproveModal(viewModal.proposal, 'REJECT'); }} 
+                className="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg font-bold hover:bg-red-600 hover:text-white transition"
+              >
+                ✗ Tolak
+              </button>
+              <button 
+                onClick={() => { setViewModal({show:false, proposal:null}); openApproveModal(viewModal.proposal, 'APPROVE'); }} 
+                className="bg-muh-green text-white px-6 py-2 rounded-lg font-bold hover:bg-muh-green-dark shadow-md"
+              >
+                ✓ Setuju & Proses
+              </button>
+              <button 
+                onClick={() => setViewModal({show:false,proposal:null})} 
+                className="bg-white text-gray-500 border px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 transition"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
@@ -316,24 +370,22 @@ export default function ApprovalsPage() {
                       <td className="px-5 py-4 text-center">
                         <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-bold">{p.status_terakhir}</span>
                       </td>
-                      <td className="px-5 py-4">
-                        <div className="flex flex-col gap-1.5 items-center min-w-[110px]">
-                          <button onClick={() => setViewModal({show:true, proposal:p})}
-                            className="w-full bg-gray-50 text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-100 text-xs">
-                            👁 Lihat Detail
+                      <td className="px-5 py-4 text-center">
+                        <div className="flex flex-col gap-2">
+                          <button 
+                            onClick={() => setViewModal({show:true, proposal:p})}
+                            className="bg-muh-green/10 text-muh-green border border-muh-green/30 px-5 py-2 rounded-lg font-bold hover:bg-muh-green hover:text-white transition-all shadow-sm text-xs"
+                          >
+                            👁 Periksa Detail
                           </button>
-                          <button onClick={() => openApproveModal(p, 'APPROVE')} disabled={isProcessing}
-                            className={`w-full bg-muh-green text-white px-3 py-1.5 rounded-lg font-bold hover:bg-muh-green-dark text-xs ${isProcessing ? 'opacity-50' : ''}`}>
-                            ✓ Setujui
-                          </button>
-                          <button onClick={() => openApproveModal(p, 'REJECT')} disabled={isProcessing}
-                            className={`w-full bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-lg font-bold hover:bg-red-100 text-xs ${isProcessing ? 'opacity-50' : ''}`}>
-                            ✗ Tolak
-                          </button>
-                          <button onClick={() => printProposal(p)}
-                            className="w-full bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 text-xs">
-                            🖨 PDF
-                          </button>
+                          {p.status_terakhir === 'APPROVED_FINAL' && (user?.role?.id === 5 || user?.role?.level === 99) && (
+                            <button 
+                              onClick={() => setPaymentModal(p)}
+                              className="bg-emerald-600 text-white px-5 py-2 rounded-lg font-black hover:bg-emerald-700 transition-all shadow-md text-xs animate-pulse"
+                            >
+                              💵 Bayar Sekarang
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -344,6 +396,52 @@ export default function ApprovalsPage() {
           </div>
         )}
       </div>
+
+      {/* MODAL BAYAR (BENDAHARA) */}
+      {paymentModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden stagger-fade-in">
+            <form onSubmit={handlePay}>
+              <div className="p-6 border-b bg-emerald-50 text-emerald-900">
+                <h3 className="text-xl font-black flex items-center gap-2">
+                   <span className="text-2xl">💵</span> Konfirmasi Pembayaran
+                </h3>
+                <p className="text-xs font-medium mt-1 uppercase tracking-wider opacity-70">ID Usulan: #USL-{paymentModal.id}</p>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                   <p className="text-[10px] text-gray-400 font-black uppercase mb-1">Nominal Cair</p>
+                   <p className="text-3xl font-black text-gray-900">
+                     Rp {paymentModal.details?.reduce((s:number, d:any) => s + Number(d.nominal), 0).toLocaleString('id-ID')}
+                   </p>
+                </div>
+
+                <div>
+                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Tanggal Keluar Kas</label>
+                   <input required name="tanggal_bayar" type="date" className="w-full border-gray-100 rounded-xl p-3 text-sm focus:ring-emerald-500 bg-gray-50 font-bold" defaultValue={new Date().toISOString().split('T')[0]} />
+                </div>
+                
+                <div>
+                   <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Keterangan / Memo Pembayaran</label>
+                   <textarea name="deskripsi" className="w-full border-gray-100 rounded-xl p-3 text-sm focus:ring-emerald-500 bg-gray-50" placeholder="Contoh: Transfer via Bank Mandiri ke Rekening Panitia..." rows={2}></textarea>
+                </div>
+              </div>
+
+              <div className="p-6 bg-gray-50 flex gap-3">
+                <button type="button" onClick={() => setPaymentModal(null)} className="flex-1 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-200 transition">Batal</button>
+                <button 
+                  type="submit" 
+                  disabled={isPaying}
+                  className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl font-black shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2"
+                >
+                  {isPaying ? 'Memproses...' : '✓ Konfirmasi Bayar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
