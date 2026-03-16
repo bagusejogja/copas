@@ -90,14 +90,14 @@ export async function GET() {
       );
       
       const totalDisetujui = (u.proposals || [])
-        .filter((p: any) => p.status_terakhir === 'APPROVED_FINAL')
+        .filter((p: any) => ['APPROVED_FINAL', 'PAID'].includes(p.status_terakhir))
         .reduce((sum: number, p: any) =>
           sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
         );
 
       const totalSPJ = (u.proposals || [])
         .reduce((sum: number, p: any) => 
-          sum + (p.pertanggungjawabans?.reduce((s: number, lpj: any) => s + Number(lpj.total_real_isasi || lpj.total_realisasi || 0), 0) || 0), 0
+          sum + (p.pertanggungjawabans?.filter((lpj: any) => lpj.status === 'APPROVED_FINAL').reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
         );
 
       return { 
@@ -133,12 +133,17 @@ export async function GET() {
         sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
       );
       const disetujuiRow = (pk.proposals || [])
-        .filter((p: any) => p.status_terakhir === 'APPROVED_FINAL')
+        .filter((p: any) => ['APPROVED_FINAL', 'PAID'].includes(p.status_terakhir))
+        .reduce((sum: number, p: any) => 
+          sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
+        );
+      const diambilRow = (pk.proposals || [])
+        .filter((p: any) => p.status_terakhir === 'PAID')
         .reduce((sum: number, p: any) => 
           sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
         );
       const dilaporkanRow = (pk.proposals || []).reduce((sum: number, p: any) => 
-        sum + (p.pertanggungjawabans?.reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
+        sum + (p.pertanggungjawabans?.filter((lpj: any) => lpj.status === 'APPROVED_FINAL').reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
       );
       
       const sisa = anggaran - disetujuiRow;
@@ -149,9 +154,9 @@ export async function GET() {
         anggaran,
         diajukan: diajukanRow,
         disetujui: disetujuiRow,
-        diambil: disetujuiRow,
+        diambil: diambilRow,
         dilaporkan: dilaporkanRow,
-        sisa
+        sisa: anggaran - disetujuiRow
       };
     });
 
