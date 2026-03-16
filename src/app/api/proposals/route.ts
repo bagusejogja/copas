@@ -103,9 +103,15 @@ export async function POST(req: NextRequest) {
         where: { is_active: true },
         orderBy: { urutan: 'asc' }
       });
-      const payload: any = await verifyToken(req.cookies.get('token')?.value || '');
-      if (flows.length > 0 && flows[0].role_id === payload.role.id) {
-         // Leap to next status immediately
+      
+      // Ambil role_id pembuat dari database untuk kepastian
+      const user = await prisma.user.findUnique({
+        where: { id: Number(pemohon_id) },
+        select: { role_id: true }
+      });
+
+      if (user && flows.length > 0 && flows[0].role_id === user.role_id) {
+         // Leap to next status immediately (Step 1 is considered done by creation)
          const nextLabel = flows.length > 1 ? `APPROVED_STEP_${flows[0].id}` : 'APPROVED_FINAL';
          await prisma.proposal.update({
             where: { id: proposal.id },
