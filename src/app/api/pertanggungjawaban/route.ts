@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       await tx.pertanggungjawaban.deleteMany({ where: { proposal_id: Number(proposal_id) } });
 
       // 2. Create new
-      const lpj = await tx.pertanggungjawaban.create({
+      const lpj = await (tx as any).pertanggungjawaban.create({
         data: {
           proposal_id: Number(proposal_id),
           ringkasan,
@@ -98,21 +98,6 @@ export async function POST(req: NextRequest) {
         },
         include: { details: true }
       });
-
-      // 3. Jika SUBMITTED, buat record KELUAR di Kas Unit (Realisasi)
-      if (finalStatus === 'SUBMITTED') {
-        await tx.kas.create({
-          data: {
-            tanggal: new Date(),
-            proposal_id: Number(proposal_id),
-            tipe: 'KELUAR',
-            kategori: 'Realisasi Kegiatan (SPJ)',
-            deskripsi: `Realisasi kegiatan: ${proposal.judul}`,
-            nominal: realization,
-            unit_id: proposal.unit_id
-          }
-        });
-      }
 
       return lpj;
     });

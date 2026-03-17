@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Only treasurer can approve SPJ' }, { status: 403 });
     }
 
-    const lpj = await prisma.pertanggungjawaban.findUnique({ 
+    const lpj = await (prisma as any).pertanggungjawaban.findUnique({ 
       where: { id: Number(lpj_id) },
       include: { proposal: true }
     });
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Update SPJ
-      const updatedLpj = await tx.pertanggungjawaban.update({
+      const updatedLpj = await (tx as any).pertanggungjawaban.update({
         where: { id: lpj.id },
         data: { status: newStatus }
       });
