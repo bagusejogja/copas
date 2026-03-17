@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
       });
 
-      // 2. Buat Record Kas (Keluar)
+      // 2. Buat Record Kas PDM (Keluar)
       const totalProposal = proposal.details.reduce((sum, d) => sum + Number(d.nominal), 0);
       const payNominal = nominal ? Number(nominal) : totalProposal;
 
@@ -57,10 +57,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           tanggal: new Date(tanggal_bayar),
           proposal_id: proposalId,
           tipe: 'KELUAR',
-          kategori: 'Usulan Anggaran',
+          kategori: 'Dropping Dana ke Unit',
           deskripsi: deskripsi || `Pembayaran usulan: ${proposal.judul}`,
           nominal: payNominal,
-          unit_id: 1 // Selalu kurangi Kas PDM (Unit ID 1) saat pembayaran usulan pusat
+          unit_id: 1 // Selalu kurangi Kas PDM (Unit ID 1)
+        }
+      });
+
+      // 3. Buat Record Kas Unit (Masuk) - Otomatis diakui unit
+      await tx.kas.create({
+        data: {
+          tanggal: new Date(tanggal_bayar),
+          proposal_id: proposalId,
+          tipe: 'MASUK',
+          kategori: 'Dropping Dana dari PDM',
+          deskripsi: `Dropping dana usulan: ${proposal.judul}`,
+          nominal: payNominal,
+          unit_id: proposal.unit_id
         }
       });
 

@@ -53,23 +53,31 @@ export async function POST(req: NextRequest) {
     if (!proposal) return NextResponse.json({ message: 'Proposal tidak ditemukan' }, { status: 404 });
 
     const totalApproved = proposal.details.reduce((sum, d) => sum + Number(d.nominal), 0);
-    if (Number(total_realisasi) > totalApproved) {
+    const realization = Number(total_realisasi);
+
+    if (realization > totalApproved) {
       return NextResponse.json({ 
-        message: `Gagal Simpan! Total realisasi (Rp ${Number(total_realisasi).toLocaleString('id-ID')}) melebihi jumlah yang disetujui (Rp ${totalApproved.toLocaleString('id-ID')}).` 
+        message: `Gagal Simpan! Total realisasi (Rp ${realization.toLocaleString('id-ID')}) melebihi jumlah yang disetujui (Rp ${totalApproved.toLocaleString('id-ID')}).` 
       }, { status: 400 });
     }
+
+    const sisaDana = totalApproved - realization;
+    const finalStatus = status || 'SUBMITTED';
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Delete existing if any (support save as draft overwrite)
       await tx.pertanggungjawaban.deleteMany({ where: { proposal_id: Number(proposal_id) } });
 
       // 2. Create new
-      return await tx.pertanggungjawaban.create({
+      const lpj = await tx.pertanggungjawaban.create({
         data: {
           proposal_id: Number(proposal_id),
           ringkasan,
-          total_realisasi: Number(total_realisasi),
-          status: status || 'SUBMITTED',
+          total_diterima: totalApproved,
+          total_realisasi: realization,
+          sisa_dana: sisaDana,
+          opsi_sisa: body.opsi_sisa || 'KEMBALI',
+          status: finalStatus,
           nama_pembuat,
           nama_bendahara,
           nama_pimpinan,
@@ -83,6 +91,23 @@ export async function POST(req: NextRequest) {
         },
         include: { details: true }
       });
+
+      // 3. Jika SUBMITTED, buat record KELUAR di Kas Unit (Realisasi)
+      if (finalStatus === 'SUBMITTED') {
+        await tx.kas.create({
+          data: {
+            tanggal: new Date(),
+            proposal_id: Number(proposal_id),
+            tipe: 'KELUAR',
+            kategori: 'Realisasi Kegiatan (SPJ)',
+            deskripsi: `Realisasi kegiatan: ${proposal.judul}`,
+            nominal: realization,
+            unit_id: proposal.unit_id
+          }
+        });
+      }
+
+      return lpj;
     });
 
     return NextResponse.json({ message: 'Laporan berhasil disimpan!', lpj: result }, { status: 201 });

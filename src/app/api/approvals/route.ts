@@ -15,47 +15,44 @@ export async function GET(req: NextRequest) {
       orderBy: { urutan: 'asc' }
     });
 
-    // 2. Tentukan posisi user di alur
+    // 2. Tentukan filter berdasarkan Role & Unit
+    const { searchParams } = new URL(req.url);
+    const filterUnit = searchParams.get('unit_id');
+    const filterStatus = searchParams.get('status');
+
     const userStepIndex = flows.findIndex(f => f.role_id === payload.role.id);
     const isBendahara = payload.role.id === 5 || payload.role.level === 99;
+    const isPusat = payload.unit.id === 1 || payload.role.level === 99;
 
-    let whereClause: any = { unit_id: payload.unit.id };
-    if (payload.unit.id === 1 || payload.role.level === 99) delete whereClause.unit_id;
+    let whereClause: any = {};
 
-    if (payload.role.level === 99) {
-       // Admin see all non-paid and non-rejected
-       whereClause.status_terakhir = { in: ['PENDING', 'APPROVED_LV1', 'APPROVED_LV2', 'APPROVED_FINAL'] };
-       // Also include dynamic steps
-       const dynamicSteps = flows.map(f => `APPROVED_STEP_${f.id}`);
-       if (Array.isArray(whereClause.status_terakhir.in)) {
-         whereClause.status_terakhir.in.push(...dynamicSteps);
-       }
+    if (!isPusat) {
+      whereClause.unit_id = payload.unit.id;
+    } else if (filterUnit) {
+      whereClause.unit_id = Number(filterUnit);
+    }
+
+    if (filterStatus) {
+      whereClause.status_terakhir = filterStatus;
     } else {
-       const possibleStatuses = [];
-       
-       // 1. Ambil status berdasarkan alur approval
-       if (userStepIndex !== -1) {
-          if (userStepIndex === 0) {
-             possibleStatuses.push('PENDING');
-          } else {
-             possibleStatuses.push(`APPROVED_STEP_${flows[userStepIndex-1].id}`);
-          }
-          
-          // Backwards Compatibility for old level-based statuses
+      if (isPusat) {
+        whereClause.status_terakhir = { notIn: ['DRAFT', 'REJECTED'] };
+      } else {
+        const possibleStatuses = [];
+        if (userStepIndex !== -1) {
+          if (userStepIndex === 0) possibleStatuses.push('PENDING');
+          else possibleStatuses.push(`APPROVED_STEP_${flows[userStepIndex-1].id}`);
           if (payload.role.level === 3) possibleStatuses.push('APPROVED_LV1');
           if (payload.role.level === 4) possibleStatuses.push('APPROVED_LV2');
-       }
-       
-       // 2. Ambil status jika dia bendahara (untuk proses bayar)
-       if (isBendahara) {
-          possibleStatuses.push('APPROVED_FINAL');
-       }
+        }
+        if (isBendahara) possibleStatuses.push('APPROVED_FINAL');
 
-       if (possibleStatuses.length > 0) {
+        if (possibleStatuses.length > 0) {
           whereClause.status_terakhir = { in: possibleStatuses };
-       } else {
+        } else {
           return NextResponse.json([]);
-       }
+        }
+      }
     }
 
     const proposals = await prisma.proposal.findMany({

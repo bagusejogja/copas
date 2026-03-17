@@ -132,6 +132,10 @@ model Proposal {
   approvals        Approval[]
   pertanggungjawabans Pertanggungjawaban[]
   kasRecords       Kas[]
+
+  @@index([status_terakhir])
+  @@index([unit_id])
+  @@index([pemohon_id])
 }
 
 model Kas {
@@ -144,6 +148,9 @@ model Kas {
   deskripsi        String
   nominal          Decimal  @db.Decimal(15, 2)
   unit_id          Int?
+
+  @@index([unit_id])
+  @@index([tanggal])
 }
 
 model Pertanggungjawaban {
@@ -161,7 +168,15 @@ model Pertanggungjawaban {
   nama_bendahara   String?
   nama_pimpinan    String?
   
+  // Data Keuangan Sisa
+  total_diterima   Decimal  @db.Decimal(15,2) @default(0) // Dana yang cair di awal
+  sisa_dana        Decimal  @db.Decimal(15,2) @default(0) // total_diterima - total_realisasi
+  opsi_sisa        String   @default("KEMBALI") // KEMBALI, LANJUT
+  
   details          PertanggungjawabanDetail[]
+
+  @@index([status])
+  @@index([proposal_id])
 }
 
 model PertanggungjawabanDetail {

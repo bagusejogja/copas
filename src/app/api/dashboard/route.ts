@@ -26,30 +26,36 @@ export async function GET() {
     const proposalWhere = isPusat ? { NOT: { status_terakhir: 'DRAFT' } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: 'DRAFT' } };
     const unitFilter = isPusat ? {} : { id: payload?.unit?.id };
 
-    console.log("Fetching dashboard stats...", { isPusat, proposalWhere });
+    // 3. Ambil Nama semua dynamic steps untuk filter PENDING
+    const flows = await prisma.approvalFlow.findMany({ where: { is_active: true } });
+    const dynamicPendingTags = flows.map(f => `APPROVED_STEP_${f.id}`);
+    const pendingStatuses = ['PENDING', ...dynamicPendingTags];
+    const finalStatuses = ['APPROVED_FINAL', 'PAID'];
 
     // Stats with safety
     const [totalUsulanCount, pendingUsulanCount, approvedFinalCount, paidUsulanCount, totalUsers, units, allProposals, allProkerBudgets]: any[] = await Promise.all([
       prisma.proposal.count({ where: proposalWhere }).catch(() => 0),
-      prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: 'PENDING' } }).catch(() => 0),
-      prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: 'APPROVED_FINAL' } }).catch(() => 0),
+      prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: { in: pendingStatuses } } }).catch(() => 0),
+      prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: { in: finalStatuses } } }).catch(() => 0),
       prisma.proposal.count({ where: { ...proposalWhere, status_terakhir: 'PAID' } }).catch(() => 0),
       prisma.user.count().catch(() => 0),
       prisma.unit.findMany({
         where: unitFilter,
         include: {
-          _count: { select: { proposals: true } },
           proposals: {
             where: isPusat ? { NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } },
             select: {
               status_terakhir: true,
               details: { select: { nominal: true } },
-              pertanggungjawabans: { select: { total_realisasi: true } }
+              pertanggungjawabans: { 
+                where: { status: 'APPROVED_FINAL' },
+                select: { total_realisasi: true } 
+              }
             }
           }
         },
         orderBy: { id: 'asc' },
-        take: 20
+        take: 50 // Increased for consolidation
       }).catch(() => []),
       prisma.proposal.findMany({
         where: proposalWhere,
@@ -75,22 +81,21 @@ export async function GET() {
     allProposals.forEach((p: any) => {
       const nominal = (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0);
       totalNominalDiajukan += nominal;
-      if (p.status_terakhir === 'PENDING') totalNominalPending += nominal;
-      if (p.status_terakhir === 'APPROVED_FINAL') totalNominalFinal += nominal;
+      if (pendingStatuses.includes(p.status_terakhir)) totalNominalPending += nominal;
+      if (finalStatuses.includes(p.status_terakhir)) totalNominalFinal += nominal;
       if (p.status_terakhir === 'PAID') totalNominalPaid += nominal;
     });
 
     console.log("Processing unit summary...");
     const unitSummary = (units || []).map((u: any) => {
-      const diajukan = u._count?.proposals || 0;
-      const disetujui_count = (u.proposals || []).filter((p: any) => p.status_terakhir === 'APPROVED_FINAL').length;
+      const diajukan = (u.proposals || []).length;
       
       const totalAnggaran = (u.proposals || []).reduce((sum: number, p: any) =>
         sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
       );
       
       const totalDisetujui = (u.proposals || [])
-        .filter((p: any) => ['APPROVED_FINAL', 'PAID'].includes(p.status_terakhir))
+        .filter((p: any) => finalStatuses.includes(p.status_terakhir))
         .reduce((sum: number, p: any) =>
           sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
         );
@@ -104,7 +109,6 @@ export async function GET() {
         id: u.id, 
         nama_unit: u.nama_unit || u.nama, 
         diajukan, 
-        disetujui: disetujui_count, 
         totalAnggaran, 
         totalDisetujui, 
         totalSPJ 

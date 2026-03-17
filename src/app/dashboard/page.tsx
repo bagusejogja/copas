@@ -24,10 +24,14 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [unitsInfo, setUnitsInfo] = useState<any[]>([]);
+  const [unitFilter, setUnitFilter] = useState<string>('');
 
   useEffect(() => {
+    setLoading(true);
+    const url = unitFilter ? `/api/dashboard?unit_id=${unitFilter}` : '/api/dashboard';
+    
     Promise.all([
-      fetch('/api/dashboard').then(res => res.json()),
+      fetch(url).then(res => res.json()),
       fetch('/api/pagu').then(res => res.json())
     ])
       .then(([dash, pagu]) => {
@@ -36,7 +40,7 @@ export default function DashboardPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [unitFilter]);
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -66,10 +70,28 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6">
-      {/* Greeting */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard Sistem Anggaran</h1>
-        <p className="text-gray-500 mt-1">Selamat datang kembali. Berikut adalah ringkasan aktivitas hari ini.</p>
+      {/* Greeting & Filter */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard Sistem Anggaran</h1>
+          <p className="text-gray-500 mt-1">Selamat datang kembali. Berikut adalah ringkasan aktivitas.</p>
+        </div>
+
+        {Array.isArray(unitsInfo) && unitsInfo.length > 1 && (
+          <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-gray-100 shadow-sm">
+            <label className="text-xs font-bold text-gray-400 uppercase ml-2">Filter Unit:</label>
+            <select 
+              value={unitFilter}
+              onChange={(e) => setUnitFilter(e.target.value)}
+              className="bg-gray-50 border-none text-sm font-semibold text-gray-700 rounded-lg focus:ring-0 cursor-pointer"
+            >
+              <option value="">Semua Unit (Konsolidasi)</option>
+              {unitsInfo.map((u: any) => (
+                <option key={u.id} value={u.id}>{u.nama_unit || u.nama}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}

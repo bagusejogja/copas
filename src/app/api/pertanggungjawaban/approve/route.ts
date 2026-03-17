@@ -46,14 +46,51 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Only treasurer can approve SPJ' }, { status: 403 });
     }
 
-    const lpj = await prisma.pertanggungjawaban.findUnique({ where: { id: Number(lpj_id) } });
+    const lpj = await prisma.pertanggungjawaban.findUnique({ 
+      where: { id: Number(lpj_id) },
+      include: { proposal: true }
+    });
     if (!lpj) return NextResponse.json({ message: 'LPJ not found' }, { status: 404 });
 
     const newStatus = action === 'APPROVE' ? 'APPROVED_FINAL' : 'REJECTED';
 
-    await prisma.pertanggungjawaban.update({
-      where: { id: lpj.id },
-      data: { status: newStatus }
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update SPJ
+      const updatedLpj = await tx.pertanggungjawaban.update({
+        where: { id: lpj.id },
+        data: { status: newStatus }
+      });
+
+      // 2. Jika APPROVE dan OPSI KEMBALI, urus Kas PDM (Masuk) & Unit (Keluar)
+      if (action === 'APPROVE' && lpj.opsi_sisa === 'KEMBALI' && Number(lpj.sisa_dana) > 0) {
+        // Keluar dari Unit
+        await tx.kas.create({
+          data: {
+            tanggal: new Date(),
+            proposal_id: lpj.proposal_id,
+            tipe: 'KELUAR',
+            kategori: 'Pengembalian Sisa Dana',
+            deskripsi: `Pengembalian sisa dana usulan: ${lpj.proposal.judul}`,
+            nominal: lpj.sisa_dana,
+            unit_id: lpj.proposal.unit_id
+          }
+        });
+
+        // Masuk ke PDM
+        await tx.kas.create({
+          data: {
+            tanggal: new Date(),
+            proposal_id: lpj.proposal_id,
+            tipe: 'MASUK',
+            kategori: 'Pengembalian Sisa Dana dari Unit',
+            deskripsi: `Terima sisa dana usulan: ${lpj.proposal.judul} (Unit ID: ${lpj.proposal.unit_id})`,
+            nominal: lpj.sisa_dana,
+            unit_id: 1 // PDM Pusat
+          }
+        });
+      }
+
+      return updatedLpj;
     });
 
     return NextResponse.json({ message: `SPJ berhasil ${action === 'APPROVE' ? 'disetujui' : 'ditolak'}` });
