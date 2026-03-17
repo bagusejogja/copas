@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 export default function DashboardLayout({
   children,
@@ -8,6 +8,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -81,7 +82,14 @@ export default function DashboardLayout({
             </a>
           )}
           {hasPermission('/dashboard/pertanggungjawaban/approvals') && (
-            <a href="/dashboard/pertanggungjawaban/approvals" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-emerald-300 font-bold hover:bg-white/10 transition-colors text-sm">
+            <a 
+              href="/dashboard/pertanggungjawaban/approvals" 
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
+                pathname === '/dashboard/pertanggungjawaban/approvals' 
+                ? 'bg-white/20 text-emerald-300 font-bold' 
+                : 'text-white/80 font-medium hover:bg-white/10 hover:text-white'
+              }`}
+            >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
               Persetujuan SPJ
             </a>

@@ -116,6 +116,20 @@ export async function POST(req: NextRequest) {
             }
           });
         }
+      } else if (action === 'REVERT_DRAFT') {
+        // Special action to allow testing by reverting an approved/submitted SPJ back to DRAFT
+        await (tx as any).pertanggungjawaban.update({
+          where: { id: lpj.id },
+          data: { status: 'DRAFT' }
+        });
+        
+        // Remove related cash records if it was previously approved
+        await tx.kas.deleteMany({
+          where: { 
+            proposal_id: lpj.proposal_id,
+            kategori: { in: ['Realisasi Kegiatan (SPJ)', 'Pengembalian Sisa Dana', 'Pengembalian Sisa Dana dari Unit'] }
+          }
+        });
       }
 
       return updatedLpj;
