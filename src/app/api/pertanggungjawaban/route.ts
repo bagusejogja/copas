@@ -46,43 +46,56 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { 
-      proposal_id, ringkasan, total_realisasi, status, 
+      lpj_id, proposal_id, ringkasan, total_realisasi, status, 
       nama_pembuat, nama_bendahara, nama_pimpinan, details 
     } = body;
 
-    if (!proposal_id) return NextResponse.json({ message: 'Proposal ID is required' }, { status: 400 });
+    const pid = Number(proposal_id);
+    if (!pid) return NextResponse.json({ message: 'Proposal ID is required' }, { status: 400 });
 
-    // Validation: Realization cannot exceed Approved Proposal Amount
     const proposal = await prisma.proposal.findUnique({
-      where: { id: Number(proposal_id) },
-      include: { details: true }
+      where: { id: pid },
+      include: { 
+        details: true,
+        pertanggungjawabans: {
+          where: { 
+             id: { not: lpj_id ? Number(lpj_id) : 0 },
+             status: { not: 'REJECTED' } 
+          }
+        }
+      }
     });
 
     if (!proposal) return NextResponse.json({ message: 'Proposal tidak ditemukan' }, { status: 404 });
 
     const totalApproved = proposal.details.reduce((sum, d) => sum + Number(d.nominal), 0);
-    const realization = Number(total_realisasi);
+    const existingRealization = proposal.pertanggungjawabans.reduce((sum, pj) => sum + Number(pj.total_realisasi), 0);
+    const newRealization = Number(total_realisasi);
 
-    if (realization > totalApproved) {
+    if (existingRealization + newRealization > totalApproved) {
+      const sisa = totalApproved - existingRealization;
       return NextResponse.json({ 
-        message: `Gagal Simpan! Total realisasi (Rp ${realization.toLocaleString('id-ID')}) melebihi jumlah yang disetujui (Rp ${totalApproved.toLocaleString('id-ID')}).` 
+        message: `Gagal Simpan! Total realisasi kumulatif (Rp ${(existingRealization + newRealization).toLocaleString('id-ID')}) melebihi anggaran yang disetujui (Rp ${totalApproved.toLocaleString('id-ID')}). Sisa anggaran tersedia: Rp ${sisa.toLocaleString('id-ID')}` 
       }, { status: 400 });
     }
 
-    const sisaDana = totalApproved - realization;
+    const sisaDana = totalApproved - (existingRealization + newRealization);
     const finalStatus = status || 'SUBMITTED';
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Delete existing if any (support save as draft overwrite)
-      await tx.pertanggungjawaban.deleteMany({ where: { proposal_id: Number(proposal_id) } });
+      // 1. If lpj_id exists, delete its old data (simple update strategy)
+      if (lpj_id) {
+         await tx.pertanggungjawabanDetail.deleteMany({ where: { pj_id: Number(lpj_id) } });
+         await tx.pertanggungjawaban.delete({ where: { id: Number(lpj_id) } });
+      }
 
-      // 2. Create new
+      // 2. Create new record (for either fresh or updated draft)
       const lpj = await (tx as any).pertanggungjawaban.create({
         data: {
-          proposal_id: Number(proposal_id),
+          proposal_id: pid,
           ringkasan,
           total_diterima: totalApproved,
-          total_realisasi: realization,
+          total_realisasi: newRealization,
           sisa_dana: sisaDana,
           opsi_sisa: body.opsi_sisa || 'KEMBALI',
           status: finalStatus,

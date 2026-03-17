@@ -15,6 +15,7 @@ export default function LaporanPage() {
 
   // LPJ Form State
   const [selected, setSelected] = useState<any | null>(null);
+  const [selectedLpjId, setSelectedLpjId] = useState<number | null>(null);
   const [ringkasan, setRingkasan] = useState('');
   const [details, setDetails] = useState([{ account_id: '', keterangan: '', nominal: '' }]);
   const [namaPembuat, setNamaPembuat] = useState('');
@@ -73,10 +74,11 @@ export default function LaporanPage() {
 
   const calculateTotalRealisasi = () => details.reduce((s, d) => s + Number(d.nominal || 0), 0);
 
-  const onSelectProposal = (p: any) => {
+  const onSelectProposal = (p: any, lpj?: any) => {
     setSelected(p);
-    if (p.pertanggungjawabans?.length > 0) {
-      const lpj = p.pertanggungjawabans[0];
+    if (lpj) {
+      // Editing existing (Draft or Rejected)
+      setSelectedLpjId(lpj.id);
       setRingkasan(lpj.ringkasan || '');
       setNamaPembuat(lpj.nama_pembuat || user?.nama || '');
       setNamaBendahara(lpj.nama_bendahara || '');
@@ -93,7 +95,8 @@ export default function LaporanPage() {
         setDetails([{ account_id: '', keterangan: '', nominal: '' }]);
       }
     } else {
-      // New SPJ
+      // New SPJ for this proposal
+      setSelectedLpjId(null);
       setRingkasan('');
       setDetails([{ account_id: '', keterangan: '', nominal: '' }]);
       setNamaPembuat(user?.nama || '');
@@ -106,11 +109,14 @@ export default function LaporanPage() {
   const onSave = async (status: 'DRAFT' | 'SUBMITTED') => {
     if (!selected) return;
     
-    // Validation: Realization cannot exceed Approved Proposal Amount
+    // Validation: Cumulative Realization across ALL SPJs cannot exceed Approved Proposal Amount
     const totalRAB = selected.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) || 0;
-    const totalReal = calculateTotalRealisasi();
-    if (totalReal > totalRAB) {
-       alert(`Maaf, total realisasi (Rp ${totalReal.toLocaleString('id-ID')}) tidak boleh melebihi anggaran yang disetujui (Rp ${totalRAB.toLocaleString('id-ID')}).`);
+    const others = (selected.pertanggungjawabans || []).filter((pj: any) => pj.id !== selectedLpjId && pj.status !== 'REJECTED');
+    const cumRealPrev = others.reduce((s: number, pj: any) => s + Number(pj.total_realisasi), 0);
+    const totalNow = cumRealPrev + calculateTotalRealisasi();
+
+    if (totalNow > totalRAB) {
+       alert(`Maaf, total realisasi kumulatif (Rp ${totalNow.toLocaleString('id-ID')}) tidak boleh melebihi anggaran yang disetujui (Rp ${totalRAB.toLocaleString('id-ID')}).`);
        return;
     }
 
@@ -120,6 +126,7 @@ export default function LaporanPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
+          lpj_id: selectedLpjId,
           proposal_id: selected.id, 
           ringkasan, 
           total_realisasi: calculateTotalRealisasi(),
@@ -143,10 +150,13 @@ export default function LaporanPage() {
 
   const getStatusBadge = (status: string) => {
     const map: any = {
-      'PAID': { label: 'Dibayar Bendahara', css: 'bg-emerald-100 text-emerald-800' },
+      'PAID': { label: 'Sudah Cair', css: 'bg-emerald-600 text-white shadow-sm' },
+      'APPROVED_FINAL': { label: 'Disetujui', css: 'bg-green-100 text-green-800' },
+      'APPROVED_LV1': { label: 'Disetujui Atasan', css: 'bg-blue-100 text-blue-800' },
+      'APPROVED_STEP_15': { label: 'Review Keuangan', css: 'bg-purple-100 text-purple-800' },
     };
     const s = map[status] || { label: status, css: 'bg-gray-100 text-gray-800' };
-    return <span className={`px-2 py-1 rounded-lg text-xs font-bold ${s.css}`}>{s.label}</span>;
+    return <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${s.css}`}>{s.label}</span>;
   };
 
   return (
@@ -201,57 +211,71 @@ export default function LaporanPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {proposals.map(p => {
-            const hasLpj = p.pertanggungjawabans?.length > 0;
-            const lpjStatus = hasLpj ? p.pertanggungjawabans[0].status : null;
+           {proposals.map(p => {
             const isSelected = selected?.id === p.id;
             const totalRAB = p.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) || 0;
+            const lpjs = p.pertanggungjawabans || [];
+            
+            // Calculate Total Realization (Exclude rejected)
+            const cumRealization = lpjs.filter((l: any) => l.status !== 'REJECTED').reduce((s: number, l: any) => s + Number(l.total_realisasi), 0);
+            const balance = totalRAB - cumRealization;
 
             return (
-              <div key={p.id} className={`bg-white rounded-2xl shadow-xl overflow-hidden border-2 transition-all ${isSelected ? 'border-blue-400 ring-4 ring-blue-50' : hasLpj ? 'border-emerald-100' : 'border-gray-100'}`}>
+              <div key={p.id} className={`bg-white rounded-2xl shadow-xl overflow-hidden border-2 transition-all ${isSelected ? 'border-blue-400 ring-4 ring-blue-50' : lpjs.length > 0 ? 'border-emerald-100' : 'border-gray-100'}`}>
                  <div className="p-6 flex flex-col md:flex-row justify-between gap-6">
                     <div className="flex-1">
                        <div className="flex items-center gap-3 mb-2">
                           <span className="bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-mono">#USL-{p.id}</span>
                           {getStatusBadge(p.status_terakhir)}
-                          {hasLpj && (
-                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                              lpjStatus === 'DRAFT' ? 'bg-orange-100 text-orange-800' : 
-                              lpjStatus === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                              'bg-emerald-600 text-white shadow-sm'
-                            }`}>
-                              {lpjStatus === 'DRAFT' ? '📝 Draf SPJ' : lpjStatus === 'REJECTED' ? '❌ SPJ Ditolak' : '✅ SPJ Terkirim'}
-                            </span>
-                          )}
+                          {lpjs.length > 0 && <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">{lpjs.length} Nota Terbit</span>}
                        </div>
                        <h2 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition">{p.judul}</h2>
-                       <div className="mt-3 flex gap-4 text-xs font-medium text-gray-400">
-                          <span className="flex items-center gap-1">📅 {new Date(p.tanggal).toLocaleDateString('id-ID')}</span>
-                          <span className="flex items-center gap-1">🏢 {p.unit?.nama_unit}</span>
-                          <span className="flex items-center gap-1 font-bold text-muh-green">💰 Anggaran: Rp {totalRAB.toLocaleString('id-ID')}</span>
+                       <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center">
+                          <div className="text-xs">
+                             <p className="text-gray-400 font-bold uppercase text-[9px]">🏢 Unit / Majelis</p>
+                             <p className="font-semibold text-gray-700">{p.unit?.nama_unit}</p>
+                          </div>
+                          <div className="text-xs">
+                             <p className="text-gray-400 font-bold uppercase text-[9px]">💰 Anggaran Cair</p>
+                             <p className="font-semibold text-gray-700">Rp {totalRAB.toLocaleString('id-ID')}</p>
+                          </div>
+                          <div className="text-xs">
+                             <p className="text-emerald-500 font-bold uppercase text-[9px]">✅ Realisasi (Total)</p>
+                             <p className="font-extrabold text-emerald-700">Rp {cumRealization.toLocaleString('id-ID')}</p>
+                          </div>
+                          <div className={`text-xs p-2 rounded-xl ${balance > 0 ? 'bg-orange-50' : 'bg-gray-50'}`}>
+                             <p className="text-gray-500 font-bold uppercase text-[9px]">📉 Sisa Anggaran</p>
+                             <p className={`font-black ${balance > 0 ? 'text-orange-600' : 'text-gray-400'}`}>Rp {balance.toLocaleString('id-ID')}</p>
+                          </div>
                        </div>
+
+                       {/* List SPJ existing */}
+                       {lpjs.length > 0 && (
+                         <div className="mt-4 flex flex-wrap gap-2">
+                            {lpjs.map((lpj: any) => (
+                              <div key={lpj.id} className="flex items-center gap-2 bg-gray-50 border p-2 rounded-xl">
+                                 <span className={`w-2 h-2 rounded-full ${lpj.status === 'DRAFT' ? 'bg-orange-400' : lpj.status === 'REJECTED' ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
+                                 <span className="text-[10px] font-bold text-gray-600">RP {Number(lpj.total_realisasi).toLocaleString('id-ID')}</span>
+                                 <button onClick={() => setViewLpj({...p, current_pj: lpj})} className="text-[10px] text-blue-600 hover:underline">Detail</button>
+                                 {(lpj.status === 'DRAFT' || lpj.status === 'REJECTED') && canCreate && (
+                                   <button onClick={() => onSelectProposal(p, lpj)} className="text-[10px] text-orange-600 font-black hover:underline uppercase">✎ {lpj.status === 'REJECTED' ? 'Perbaiki' : 'Edit'}</button>
+                                 )}
+                              </div>
+                            ))}
+                         </div>
+                       )}
                     </div>
 
                     <div className="flex gap-2 items-center">
-                       {hasLpj ? (
-                          <div className="flex gap-2">
-                             <button onClick={() => setViewLpj(p)} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">👁 Lihat {lpjStatus === 'REJECTED' ? 'Alasan' : 'LPJ'}</button>
-                             {(lpjStatus === 'DRAFT' || lpjStatus === 'REJECTED') && canCreate && (
-                               <button 
-                                 onClick={() => onSelectProposal(p)} 
-                                 className={`${lpjStatus === 'REJECTED' ? 'bg-red-50 text-red-600 hover:bg-red-600' : 'bg-orange-50 text-orange-600 hover:bg-orange-600'} hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2`}
-                               >
-                                  {lpjStatus === 'REJECTED' ? '✎ Perbaiki' : '✎ Lanjutkan'}
-                               </button>
-                             )}
-                          </div>
-                       ) : (
-                          canCreate && (
-                             <button onClick={() => isSelected ? setSelected(null) : onSelectProposal(p)} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all shadow-lg ${isSelected ? 'bg-gray-100 text-gray-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                                {isSelected ? '✕ Batal' : '+ Buat SPJ'}
-                             </button>
-                          )
+                       {balance > 0 && canCreate && (
+                          <button 
+                             onClick={() => isSelected ? setSelected(null) : onSelectProposal(p)} 
+                             className={`px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg flex items-center gap-2 ${isSelected ? 'bg-gray-100 text-gray-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                          >
+                             {isSelected ? '✕ Batal' : '+ Tambah Nota SPJ'}
+                          </button>
                        )}
+                       {balance <= 0 && <span className="text-xs font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">Lunas SPJ ✓</span>}
                     </div>
                  </div>
 
@@ -389,34 +413,28 @@ export default function LaporanPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
                      <div className="bg-gray-50 p-4 rounded-2xl shadow-sm border border-gray-100">
                         <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">Status Laporan</p>
-                        <p className={`text-xs font-black uppercase ${viewLpj.pertanggungjawabans?.[0]?.status === 'DRAFT' ? 'text-orange-500' : 'text-emerald-600'}`}>
-                           {viewLpj.pertanggungjawabans?.[0]?.status || 'BELUM ADA'}
+                        <p className={`text-xs font-black uppercase ${viewLpj.current_pj?.status === 'DRAFT' ? 'text-orange-500' : viewLpj.current_pj?.status === 'REJECTED' ? 'text-red-500' : 'text-emerald-600'}`}>
+                           {viewLpj.current_pj?.status || 'BELUM ADA'}
                         </p>
                      </div>
                      <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 shadow-sm">
-                        <p className="text-[10px] text-blue-400 font-bold uppercase mb-1">Disetujui (RAB)</p>
+                        <p className="text-[10px] text-blue-400 font-bold uppercase mb-1">Total Cair</p>
                         <p className="text-sm font-black text-blue-900">
                            Rp {(viewLpj.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) || 0).toLocaleString('id-ID')}
                         </p>
                      </div>
                      <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 shadow-sm">
-                        <p className="text-[10px] text-emerald-600 font-bold uppercase mb-1">Realisasi (Nota)</p>
+                        <p className="text-[10px] text-emerald-600 font-bold uppercase mb-1">Nilai Nota Ini</p>
                         <p className="text-sm font-black text-emerald-700">
-                           Rp {Number(viewLpj.pertanggungjawabans?.[0]?.total_realisasi || 0).toLocaleString('id-ID')}
+                           Rp {Number(viewLpj.current_pj?.total_realisasi || 0).toLocaleString('id-ID')}
                         </p>
                      </div>
-                     <div className={`p-4 rounded-2xl shadow-sm border ${
-                        (viewLpj.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) - (viewLpj.pertanggungjawabans?.[0]?.total_realisasi || 0)) < 0 
-                        ? 'bg-red-50 border-red-100' : 'bg-gray-900 border-gray-800'
-                     }`}>
-                        <p className="text-[10px] text-white/50 font-bold uppercase mb-1">Sisa Anggaran</p>
-                        <p className={`text-sm font-black ${
-                           (viewLpj.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) - (viewLpj.pertanggungjawabans?.[0]?.total_realisasi || 0)) < 0 
-                           ? 'text-red-600' : 'text-white'
-                        }`}>
-                           Rp {(viewLpj.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) - (viewLpj.pertanggungjawabans?.[0]?.total_realisasi || 0)).toLocaleString('id-ID')}
+                     <div className="bg-gray-900 p-4 rounded-2xl border border-gray-800 shadow-sm text-white">
+                        <p className="text-[10px] text-white/50 font-bold uppercase mb-1">Sisa Dana</p>
+                        <p className="text-sm font-black text-white">
+                           Rp {Number(viewLpj.current_pj?.sisa_dana || 0).toLocaleString('id-ID')}
                         </p>
-                        <p className="text-[8px] text-white/40 mt-1 uppercase font-bold tracking-tighter">Opsi: {viewLpj.pertanggungjawabans?.[0]?.opsi_sisa || 'KEMBALI'}</p>
+                        <p className="text-[8px] text-white/40 mt-1 uppercase font-bold tracking-tighter">Opsi: {viewLpj.current_pj?.opsi_sisa || 'KEMBALI'}</p>
                      </div>
                   </div>
 
@@ -432,35 +450,41 @@ export default function LaporanPage() {
                               </tr>
                            </thead>
                            <tbody className="divide-y divide-gray-50">
-                              {viewLpj.pertanggungjawabans?.[0]?.details?.map((item: any, idx: number) => (
+                              {(viewLpj.current_pj?.details || []).map((item: any, idx: number) => (
                                  <tr key={idx} className="hover:bg-gray-50/50">
-                                    <td className="px-6 py-4 font-mono text-xs">[{item.account?.nomor}] {item.account?.nama_akun}</td>
-                                    <td className="px-6 py-4 text-gray-600">{item.keterangan}</td>
-                                    <td className="px-6 py-4 text-right font-bold text-gray-900">Rp {Number(item.nominal).toLocaleString('id-ID')}</td>
+                                    <td className="px-6 py-4 font-mono text-[10px] text-gray-400">[{item.account?.nomor}] {item.account?.nama_akun}</td>
+                                    <td className="px-6 py-4 font-medium text-gray-700">{item.keterangan}</td>
+                                    <td className="px-6 py-4 text-right font-black text-gray-900 leading-tight">Rp {Number(item.nominal).toLocaleString('id-ID')}</td>
                                  </tr>
                               ))}
                            </tbody>
+                           <tfoot className="bg-gray-50/50">
+                              <tr>
+                                 <td colSpan={2} className="px-6 py-4 text-right text-[10px] font-black uppercase text-gray-400">Total Nominal Nota</td>
+                                 <td className="px-6 py-4 text-right font-black text-blue-600 underline">Rp {Number(viewLpj.current_pj?.total_realisasi || 0).toLocaleString('id-ID')}</td>
+                              </tr>
+                           </tfoot>
                         </table>
                      </div>
                   </div>
 
                   <div className="space-y-4">
                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest">📝 Ringkasan Hasil Kegiatan</p>
-                     <p className="text-sm text-gray-700 bg-gray-50 p-6 rounded-3xl leading-relaxed whitespace-pre-line border border-gray-100 italic">"{viewLpj.pertanggungjawabans?.[0]?.ringkasan}"</p>
+                     <p className="text-sm text-gray-700 bg-gray-50 p-6 rounded-3xl leading-relaxed whitespace-pre-line border border-gray-100 italic">"{viewLpj.current_pj?.ringkasan || '-'}"</p>
                   </div>
 
                   <div className="grid grid-cols-3 gap-8 pt-8 border-t border-gray-100 text-center">
                      <div>
                         <p className="text-[10px] text-gray-400 font-bold uppercase mb-8">Pihak Pertama (PIC)</p>
-                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.pertanggungjawabans?.[0]?.nama_pembuat || '-'}</p>
+                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.current_pj?.nama_pembuat || '-'}</p>
                      </div>
                      <div>
                         <p className="text-[10px] text-gray-400 font-bold uppercase mb-8">Bendahara Unit</p>
-                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.pertanggungjawabans?.[0]?.nama_bendahara || '-'}</p>
+                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.current_pj?.nama_bendahara || '-'}</p>
                      </div>
                      <div>
                         <p className="text-[10px] text-gray-400 font-bold uppercase mb-8">Pimpinan Unit</p>
-                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.pertanggungjawabans?.[0]?.nama_pimpinan || '-'}</p>
+                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.current_pj?.nama_pimpinan || '-'}</p>
                      </div>
                   </div>
                </div>

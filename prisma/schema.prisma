@@ -155,7 +155,7 @@ model Kas {
 
 model Pertanggungjawaban {
   id               Int      @id @default(autoincrement())
-  proposal_id      Int      @unique
+  proposal_id      Int      
   proposal         Proposal @relation(fields: [proposal_id], references: [id], onDelete: Cascade)
   tanggal_laporan  DateTime @default(now())
   ringkasan        String   @db.Text
