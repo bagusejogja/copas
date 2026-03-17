@@ -9,8 +9,20 @@ export async function GET(req: NextRequest) {
     
     const payload: any = await verifyToken(token);
     
+    const { searchParams } = new URL(req.url);
+    const filterUnit = searchParams.get('unit_id');
+    const filterStatus = searchParams.get('status');
+
+    // PDM level (Unit ID 1) or Admin (Level 99) can see all
+    const isPDM = payload.unit.id === 1 || payload.role.level === 99;
+    
+    let whereClause: any = isPDM ? {} : { unit_id: payload.unit.id };
+    
+    if (filterUnit) whereClause.unit_id = Number(filterUnit);
+    if (filterStatus) whereClause.status_terakhir = filterStatus;
+
     const proposals = await prisma.proposal.findMany({
-      where: payload.role.level === 99 ? {} : { unit_id: payload.unit.id },
+      where: whereClause,
       include: {
         unit: true,
         pemohon: true,

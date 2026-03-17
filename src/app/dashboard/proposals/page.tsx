@@ -16,17 +16,25 @@ type Proposal = {
 
 export default function ProposalsPage() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProposal, setSelectedProposal] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [canCreate, setCanCreate] = useState(false);
   const [paymentModal, setPaymentModal] = useState<any>(null);
   const [isPaying, setIsPaying] = useState(false);
+  
+  // Filters
+  const [filterUnit, setFilterUnit] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  useEffect(() => {
+    fetchUserPermissions();
+  }, []);
 
   useEffect(() => {
     fetchProposals();
-    fetchUserPermissions();
-  }, []);
+  }, [filterUnit, filterStatus]);
 
   const fetchUserPermissions = async () => {
     const res = await fetch('/api/auth/me');
@@ -36,12 +44,23 @@ export default function ProposalsPage() {
       const p = data.permissions.find((perm: any) => perm.menu.path === '/dashboard/proposals');
       setCanCreate(p ? p.can_create : false);
     }
+    
+    // If Admin or PDM (Unit 1), fetch units for filter
+    if (data?.role?.level === 99 || data?.unit?.id === 1) {
+      const resUnits = await fetch('/api/units');
+      const dataUnits = await resUnits.json();
+      setUnits(dataUnits || []);
+    }
   };
 
   const fetchProposals = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/proposals');
+      const query = new URLSearchParams();
+      if (filterUnit) query.set('unit_id', filterUnit);
+      if (filterStatus) query.set('status', filterStatus);
+
+      const res = await fetch('/api/proposals?' + query.toString());
       const data = await res.json();
       setProposals(Array.isArray(data) ? data : []);
     } finally {
@@ -127,6 +146,48 @@ export default function ProposalsPage() {
           </Link>
         )}
       </div>
+      
+      {/* FILTER PANEL (For PDM / Admin) */}
+      {(user?.role?.level === 99 || user?.unit?.id === 1) && (
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Filter Unit / Majelis</label>
+            <select 
+              value={filterUnit} 
+              onChange={(e) => setFilterUnit(e.target.value)}
+              className="w-full border-gray-200 rounded-lg p-2 text-sm focus:ring-muh-green"
+            >
+              <option value="">-- Semua Unit --</option>
+              {units.map((u: any) => (
+                <option key={u.id} value={u.id}>{u.nama_unit}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Filter Status</label>
+            <select 
+              value={filterStatus} 
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full border-gray-200 rounded-lg p-2 text-sm focus:ring-muh-green"
+            >
+              <option value="">-- Semua Status --</option>
+              <option value="DRAFT">Draf</option>
+              <option value="PENDING">Menunggu Persetujuan</option>
+              <option value="APPROVED_FINAL">Disetujui (Siap Bayar)</option>
+              <option value="PAID">Sudah Terbayar</option>
+              <option value="REJECTED">Ditolak</option>
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button 
+              onClick={() => { setFilterUnit(''); setFilterStatus(''); }}
+              className="text-xs text-red-500 font-bold hover:underline mb-2"
+            >
+              ✕ Reset Filter
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
          {loading ? (

@@ -25,6 +25,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [unitsInfo, setUnitsInfo] = useState<any[]>([]);
   const [unitFilter, setUnitFilter] = useState<string>('');
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me').then(res => res.json()).then(setUser);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -32,11 +37,11 @@ export default function DashboardPage() {
     
     Promise.all([
       fetch(url).then(res => res.json()),
-      fetch('/api/pagu').then(res => res.json())
+      fetch('/api/units').then(res => res.json())
     ])
-      .then(([dash, pagu]) => {
+      .then(([dash, units]) => {
         setData(dash);
-        setUnitsInfo(pagu);
+        setUnitsInfo(units);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -76,16 +81,17 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-gray-900">Dashboard Sistem Anggaran</h1>
           <p className="text-gray-500 mt-1">Selamat datang kembali. Berikut adalah ringkasan aktivitas.</p>
         </div>
-
-        {Array.isArray(unitsInfo) && unitsInfo.length > 1 && (
-          <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-gray-100 shadow-sm">
-            <label className="text-xs font-bold text-gray-400 uppercase ml-2">Filter Unit:</label>
+        
+        {/* Filter Panel (For PDM / Admin) */}
+        {(user?.role?.level === 99 || user?.unit?.id === 1) && (
+          <div className="flex items-center gap-3 bg-white p-2 rounded-xl border border-gray-100 shadow-sm transition-all hover:border-muh-green">
+            <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Pilih Pantauan Unit:</label>
             <select 
               value={unitFilter}
               onChange={(e) => setUnitFilter(e.target.value)}
-              className="bg-gray-50 border-none text-sm font-semibold text-gray-700 rounded-lg focus:ring-0 cursor-pointer"
+              className="bg-transparent border-none text-sm font-black text-muh-green rounded-lg focus:ring-0 cursor-pointer"
             >
-              <option value="">Semua Unit (Konsolidasi)</option>
+              <option value="">Semua Majelis (Gabungan)</option>
               {unitsInfo.map((u: any) => (
                 <option key={u.id} value={u.id}>{u.nama_unit || u.nama}</option>
               ))}
@@ -289,7 +295,7 @@ export default function DashboardPage() {
                 <tbody className="divide-y divide-gray-50">
                   {data?.unitSummary.map((u: any) => {
                     const paguData = Array.isArray(unitsInfo) 
-                      ? unitsInfo.find(ui => ui.id === u.id)?.paguRecords.find((r: any) => r.tahun === new Date().getFullYear())
+                      ? unitsInfo.find(ui => ui.id === u.id)?.paguRecords?.find((r: any) => r.tahun === new Date().getFullYear())
                       : null;
                     const paguNominal = paguData ? Number(paguData.nominal) : 0;
                     const pct = paguNominal > 0 ? (u.totalDisetujui / paguNominal) * 100 : 0;
@@ -339,7 +345,7 @@ export default function DashboardPage() {
             ) : data?.recentProposals.map((p: any) => (
               <div key={p.id} className="px-5 py-4 flex items-center gap-3 hover:bg-gray-50/50 transition">
                 <div className="h-9 w-9 rounded-full bg-muh-green/10 flex items-center justify-center text-muh-green font-bold text-sm flex-shrink-0">
-                  {p.id}
+                   {p.id}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-800 text-sm truncate">{p.judul}</p>

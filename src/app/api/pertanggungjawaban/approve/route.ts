@@ -61,33 +61,48 @@ export async function POST(req: NextRequest) {
         data: { status: newStatus }
       });
 
-      // 2. Jika APPROVE dan OPSI KEMBALI, urus Kas PDM (Masuk) & Unit (Keluar)
-      if (action === 'APPROVE' && lpj.opsi_sisa === 'KEMBALI' && Number(lpj.sisa_dana) > 0) {
-        // Keluar dari Unit
+      if (action === 'APPROVE') {
+        // 2. Selalu Catat KELUAR di Kas Unit (Realisasi)
         await tx.kas.create({
           data: {
             tanggal: new Date(),
             proposal_id: lpj.proposal_id,
             tipe: 'KELUAR',
-            kategori: 'Pengembalian Sisa Dana',
-            deskripsi: `Pengembalian sisa dana usulan: ${lpj.proposal.judul}`,
-            nominal: lpj.sisa_dana,
+            kategori: 'Realisasi Kegiatan (SPJ)',
+            deskripsi: `Realisasi kegiatan: ${lpj.proposal.judul}`,
+            nominal: lpj.total_realisasi,
             unit_id: lpj.proposal.unit_id
           }
         });
 
-        // Masuk ke PDM
-        await tx.kas.create({
-          data: {
-            tanggal: new Date(),
-            proposal_id: lpj.proposal_id,
-            tipe: 'MASUK',
-            kategori: 'Pengembalian Sisa Dana dari Unit',
-            deskripsi: `Terima sisa dana usulan: ${lpj.proposal.judul} (Unit ID: ${lpj.proposal.unit_id})`,
-            nominal: lpj.sisa_dana,
-            unit_id: 1 // PDM Pusat
-          }
-        });
+        // 3. Jika OPSI KEMBALI, urus Kas PDM (Masuk) & Unit (Keluar) untu Sisa
+        if (lpj.opsi_sisa === 'KEMBALI' && Number(lpj.sisa_dana) > 0) {
+          // Keluar dari Unit (Sisa Dana Balik)
+          await tx.kas.create({
+            data: {
+              tanggal: new Date(),
+              proposal_id: lpj.proposal_id,
+              tipe: 'KELUAR',
+              kategori: 'Pengembalian Sisa Dana',
+              deskripsi: `Pengembalian sisa dana usulan: ${lpj.proposal.judul}`,
+              nominal: lpj.sisa_dana,
+              unit_id: lpj.proposal.unit_id
+            }
+          });
+
+          // Masuk ke PDM
+          await tx.kas.create({
+            data: {
+              tanggal: new Date(),
+              proposal_id: lpj.proposal_id,
+              tipe: 'MASUK',
+              kategori: 'Pengembalian Sisa Dana dari Unit',
+              deskripsi: `Terima sisa dana usulan: ${lpj.proposal.judul} (Unit ID: ${lpj.proposal.unit_id})`,
+              nominal: lpj.sisa_dana,
+              unit_id: 1 // PDM Pusat
+            }
+          });
+        }
       }
 
       return updatedLpj;

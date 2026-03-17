@@ -9,12 +9,19 @@ export async function GET(req: NextRequest) {
     
     const payload: any = await verifyToken(token);
     
-    // get proposals that are FINALIZED or PAID
-    const whereClause = payload.role.level === 99 ? {} : { unit_id: payload.unit.id };
+    const { searchParams } = new URL(req.url);
+    const filterUnit = searchParams.get('unit_id');
+    const filterStatus = searchParams.get('status');
+
+    // PDM level (Unit ID 1) or Admin (Level 99) can see all
+    const isPDM = payload.unit.id === 1 || payload.role.level === 99;
+    
+    let baseWhere: any = isPDM ? {} : { unit_id: payload.unit.id };
+    if (filterUnit) baseWhere.unit_id = Number(filterUnit);
 
     const proposals = await prisma.proposal.findMany({
       where: {
-         ...whereClause,
+         ...baseWhere,
          status_terakhir: 'PAID'
       },
       include: {

@@ -4,10 +4,14 @@ import Link from 'next/link';
 
 export default function LaporanPage() {
   const [proposals, setProposals] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [canCreate, setCanCreate] = useState(false);
   const [user, setUser] = useState<any>(null);
+
+  // Filters
+  const [filterUnit, setFilterUnit] = useState('');
 
   // LPJ Form State
   const [selected, setSelected] = useState<any | null>(null);
@@ -25,8 +29,11 @@ export default function LaporanPage() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
+      const query = new URLSearchParams();
+      if (filterUnit) query.set('unit_id', filterUnit);
+
       const [resReq, resRef, resUser] = await Promise.all([
-        fetch('/api/pertanggungjawaban'),
+        fetch('/api/pertanggungjawaban?' + query.toString()),
         fetch('/api/proposals/references'),
         fetch('/api/auth/me')
       ]);
@@ -38,6 +45,13 @@ export default function LaporanPage() {
       setAccounts(dataRef.accounts || []);
       setUser(dataUser);
       
+      // If Admin or PDM (Unit 1), fetch units for filter
+      if (dataUser?.role?.level === 99 || dataUser?.unit?.id === 1) {
+        const resUnits = await fetch('/api/units');
+        const dataUnits = await resUnits.json();
+        setUnits(dataUnits || []);
+      }
+
       // Check permission for "Pertanggungjawaban" menu
       const p = dataUser.permissions?.find((perm: any) => perm.menu.path === '/dashboard/pertanggungjawaban');
       setCanCreate(p ? p.can_create : false);
@@ -47,7 +61,7 @@ export default function LaporanPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchInitialData(); }, []);
+  useEffect(() => { fetchInitialData(); }, [filterUnit]);
 
   const handleAddRow = () => setDetails([...details, { account_id: '', keterangan: '', nominal: '' }]);
   const handleRemoveRow = (idx: number) => setDetails(details.filter((_, i) => i !== idx));
@@ -117,6 +131,33 @@ export default function LaporanPage() {
            <p className="text-xs font-bold text-muh-green">LPJ per Item Nota / Kwitansi</p>
         </div>
       </div>
+      
+      {/* FILTER PANEL (For PDM / Admin) */}
+      {(user?.role?.level === 99 || user?.unit?.id === 1) && (
+        <div className="mb-8 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+           <div className="flex-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Filter Unit / Majelis</label>
+              <select 
+                value={filterUnit} 
+                onChange={(e) => setFilterUnit(e.target.value)}
+                className="w-full border-gray-100 rounded-xl p-2.5 text-xs focus:ring-muh-green font-bold"
+              >
+                <option value="">-- Semua Unit --</option>
+                {units.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.nama_unit}</option>
+                ))}
+              </select>
+           </div>
+           {filterUnit && (
+             <button 
+               onClick={() => setFilterUnit('')}
+               className="mt-5 text-xs text-red-500 font-bold hover:underline"
+             >
+               ✕ Reset
+             </button>
+           )}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center p-20">
@@ -258,20 +299,20 @@ export default function LaporanPage() {
                            </div>
 
                            <div className="grid grid-cols-1 gap-4">
-                              <div>
-                                 <label className="block text-xs font-black text-gray-400 uppercase mb-2">Nama Pembuat (PIC)</label>
-                                 <input type="text" value={namaPembuat} onChange={e => setNamaPembuat(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
-                              </div>
-                              <div className="grid grid-cols-2 gap-4">
-                                 <div>
-                                    <label className="block text-xs font-black text-gray-400 uppercase mb-2">Bendahara Unit</label>
-                                    <input type="text" value={namaBendahara} onChange={e => setNamaBendahara(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
-                                 </div>
-                                 <div>
-                                    <label className="block text-xs font-black text-gray-400 uppercase mb-2">Pimpinan Unit</label>
-                                    <input type="text" value={namaPimpinan} onChange={e => setNamaPimpinan(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
-                                 </div>
-                              </div>
+                               <div>
+                                  <label className="block text-xs font-black text-gray-400 uppercase mb-2">Nama Pembuat (PIC)</label>
+                                  <input type="text" value={namaPembuat} onChange={e => setNamaPembuat(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                     <label className="block text-xs font-black text-gray-400 uppercase mb-2">Bendahara Unit</label>
+                                     <input type="text" value={namaBendahara} onChange={e => setNamaBendahara(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
+                                  </div>
+                                  <div>
+                                     <label className="block text-xs font-black text-gray-400 uppercase mb-2">Pimpinan Unit</label>
+                                     <input type="text" value={namaPimpinan} onChange={e => setNamaPimpinan(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
+                                  </div>
+                               </div>
                            </div>
                         </div>
 
