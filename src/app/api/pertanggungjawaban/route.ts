@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
       },
       include: {
          pertanggungjawabans: {
-            include: { details: { include: { account: true } } }
+            include: { details: { include: { account: true } } },
+            orderBy: { id: 'desc' }
          },
          activity_type: true,
          unit: true,

@@ -237,7 +237,10 @@ export default function LaporanPage() {
                           <div className="flex gap-2">
                              <button onClick={() => setViewLpj(p)} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">👁 Lihat {lpjStatus === 'REJECTED' ? 'Alasan' : 'LPJ'}</button>
                              {(lpjStatus === 'DRAFT' || lpjStatus === 'REJECTED') && canCreate && (
-                               <button onClick={() => onSelectProposal(p)} className={`${lpjStatus === 'REJECTED' ? 'bg-red-50 text-red-600 hover:bg-red-600' : 'bg-orange-50 text-orange-600 hover:bg-orange-600'} hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2}`}>
+                               <button 
+                                 onClick={() => onSelectProposal(p)} 
+                                 className={`${lpjStatus === 'REJECTED' ? 'bg-red-50 text-red-600 hover:bg-red-600' : 'bg-orange-50 text-orange-600 hover:bg-orange-600'} hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2`}
+                               >
                                   {lpjStatus === 'REJECTED' ? '✎ Perbaiki' : '✎ Lanjutkan'}
                                </button>
                              )}
