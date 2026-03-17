@@ -231,20 +231,49 @@ export default function LaporanPage() {
                           </div>
                        </div>
 
-                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          <div>
-                             <label className="block text-xs font-black text-gray-400 uppercase mb-2">Nama Pembuat (PIC)</label>
-                             <input type="text" value={namaPembuat} onChange={e => setNamaPembuat(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-black text-gray-400 uppercase mb-2">Nama Bendahara Unit</label>
-                             <input type="text" value={namaBendahara} onChange={e => setNamaBendahara(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
-                          </div>
-                          <div>
-                             <label className="block text-xs font-black text-gray-400 uppercase mb-2">Nama Pimpinan Unit</label>
-                             <input type="text" value={namaPimpinan} onChange={e => setNamaPimpinan(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
-                          </div>
-                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                           <div className="bg-muh-green/5 p-6 rounded-3xl border-2 border-muh-green/10">
+                              <label className="block text-xs font-black text-muh-green uppercase mb-3 tracking-widest">Penanganan Sisa Dana (Rp { (selected.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) - calculateTotalRealisasi()).toLocaleString('id-ID') })</label>
+                              <div className="flex gap-4">
+                                 <button 
+                                    type="button"
+                                    onClick={() => setOpsiSisa('KEMBALI')}
+                                    className={`flex-1 p-3 rounded-2xl text-xs font-bold transition-all border-2 ${opsiSisa === 'KEMBALI' ? 'bg-muh-green text-white border-muh-green shadow-lg' : 'bg-white text-gray-400 border-gray-100 hover:border-muh-green/30'}`}
+                                 >
+                                    ↩ Kembalikan ke PDM
+                                 </button>
+                                 <button 
+                                    type="button"
+                                    onClick={() => setOpsiSisa('LANJUT')}
+                                    className={`flex-1 p-3 rounded-2xl text-xs font-bold transition-all border-2 ${opsiSisa === 'LANJUT' ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-white text-gray-400 border-gray-100 hover:border-blue-300/30'}`}
+                                 >
+                                    ➕ Lanjutkan di Unit
+                                 </button>
+                              </div>
+                              <p className="mt-3 text-[10px] text-gray-500 italic">
+                                 {opsiSisa === 'KEMBALI' 
+                                    ? '* Sisa dana akan disetorkan kembali ke Bendahara PDM setelah SPJ disetujui.' 
+                                    : '* Sisa dana tetap diakui berada di Unit untuk keperluan kegiatan lainnya.'}
+                              </p>
+                           </div>
+
+                           <div className="grid grid-cols-1 gap-4">
+                              <div>
+                                 <label className="block text-xs font-black text-gray-400 uppercase mb-2">Nama Pembuat (PIC)</label>
+                                 <input type="text" value={namaPembuat} onChange={e => setNamaPembuat(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                 <div>
+                                    <label className="block text-xs font-black text-gray-400 uppercase mb-2">Bendahara Unit</label>
+                                    <input type="text" value={namaBendahara} onChange={e => setNamaBendahara(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
+                                 </div>
+                                 <div>
+                                    <label className="block text-xs font-black text-gray-400 uppercase mb-2">Pimpinan Unit</label>
+                                    <input type="text" value={namaPimpinan} onChange={e => setNamaPimpinan(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-blue-500" />
+                                 </div>
+                              </div>
+                           </div>
+                        </div>
 
                        <div className="flex justify-end gap-3 pt-6 border-t border-blue-200">
                           <button onClick={() => onSave('DRAFT')} disabled={submitting} className="px-6 py-3 rounded-xl font-bold text-blue-600 hover:bg-blue-100 transition">💾 Simpan Draf</button>
@@ -303,6 +332,7 @@ export default function LaporanPage() {
                         }`}>
                            Rp {(viewLpj.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) - (viewLpj.pertanggungjawabans?.[0]?.total_realisasi || 0)).toLocaleString('id-ID')}
                         </p>
+                        <p className="text-[8px] text-white/40 mt-1 uppercase font-bold tracking-tighter">Opsi: {viewLpj.pertanggungjawabans?.[0]?.opsi_sisa || 'KEMBALI'}</p>
                      </div>
                   </div>
 
