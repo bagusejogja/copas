@@ -214,7 +214,15 @@ export default function LaporanPage() {
                        <div className="flex items-center gap-3 mb-2">
                           <span className="bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded font-mono">#USL-{p.id}</span>
                           {getStatusBadge(p.status_terakhir)}
-                          {hasLpj && <span className={`px-2 py-1 rounded-lg text-xs font-bold ${lpjStatus === 'DRAFT' ? 'bg-orange-100 text-orange-800' : 'bg-emerald-600 text-white shadow-sm'}`}>{lpjStatus === 'DRAFT' ? '📝 Draf SPJ' : '✅ SPJ Terkirim'}</span>}
+                          {hasLpj && (
+                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
+                              lpjStatus === 'DRAFT' ? 'bg-orange-100 text-orange-800' : 
+                              lpjStatus === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                              'bg-emerald-600 text-white shadow-sm'
+                            }`}>
+                              {lpjStatus === 'DRAFT' ? '📝 Draf SPJ' : lpjStatus === 'REJECTED' ? '❌ SPJ Ditolak' : '✅ SPJ Terkirim'}
+                            </span>
+                          )}
                        </div>
                        <h2 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition">{p.judul}</h2>
                        <div className="mt-3 flex gap-4 text-xs font-medium text-gray-400">
@@ -227,9 +235,11 @@ export default function LaporanPage() {
                     <div className="flex gap-2 items-center">
                        {hasLpj ? (
                           <div className="flex gap-2">
-                             <button onClick={() => setViewLpj(p)} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">👁 Lihat LPJ</button>
-                             {lpjStatus === 'DRAFT' && canCreate && (
-                               <button onClick={() => onSelectProposal(p)} className="bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">✎ Lanjutkan</button>
+                             <button onClick={() => setViewLpj(p)} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">👁 Lihat {lpjStatus === 'REJECTED' ? 'Alasan' : 'LPJ'}</button>
+                             {(lpjStatus === 'DRAFT' || lpjStatus === 'REJECTED') && canCreate && (
+                               <button onClick={() => onSelectProposal(p)} className={`${lpjStatus === 'REJECTED' ? 'bg-red-50 text-red-600 hover:bg-red-600' : 'bg-orange-50 text-orange-600 hover:bg-orange-600'} hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2}`}>
+                                  {lpjStatus === 'REJECTED' ? '✎ Perbaiki' : '✎ Lanjutkan'}
+                               </button>
                              )}
                           </div>
                        ) : (

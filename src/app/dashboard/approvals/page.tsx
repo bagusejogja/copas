@@ -368,7 +368,20 @@ export default function ApprovalsPage() {
                         <div className="text-xs text-gray-400 mt-0.5">{p.details.length} baris RAB</div>
                       </td>
                       <td className="px-5 py-4 text-center">
-                        <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-bold">{p.status_terakhir}</span>
+                        {(() => {
+                           const map: any = {
+                             'DRAFT': { label: 'Draf', css: 'bg-gray-100 text-gray-600' },
+                             'PENDING': { label: 'Menunggu', css: 'bg-yellow-100 text-yellow-800' },
+                             'APPROVED_LV1': { label: 'Disetujui Atasan', css: 'bg-blue-100 text-blue-800' },
+                             'APPROVED_LV2': { label: 'Review Pusat', css: 'bg-indigo-100 text-indigo-800' },
+                             'APPROVED_FINAL': { label: 'Siap Bayar', css: 'bg-green-100 text-green-800' },
+                             'APPROVED_STEP_15': { label: 'Review Keuangan', css: 'bg-purple-100 text-purple-800' },
+                             'PAID': { label: 'Sudah Terbayar', css: 'bg-emerald-600 text-white' },
+                             'REJECTED': { label: 'Ditolak', css: 'bg-red-100 text-red-800' },
+                           };
+                           const s = map[p.status_terakhir] || { label: p.status_terakhir, css: 'bg-gray-100 text-gray-800' };
+                           return <span className={`${s.css} px-2 py-1 rounded text-xs font-semibold border shadow-sm`}>{s.label}</span>;
+                        })()}
                       </td>
                       <td className="px-5 py-4 text-center">
                         <div className="flex flex-col gap-2">

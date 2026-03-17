@@ -1,21 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-
 async function main() {
   try {
-    console.log('Testing database connection...');
-    const result = await prisma.$queryRaw`SELECT 1 as connected`;
-    console.log('Database connected:', result);
-    
-    console.log('Counting users...');
-    const userCount = await prisma.user.count();
-    console.log('User count:', userCount);
-    
+    const units = await prisma.unit.findMany({ take: 1 });
+    console.log('Koneksi Database OK. Data unit:', units);
   } catch (error) {
-    console.error('Database connection failed:', error);
+    console.error('Koneksi Database GAGAL:', error);
   } finally {
     await prisma.$disconnect();
   }
 }
-
 main();
