@@ -16,6 +16,7 @@ export default function LaporanPage() {
   const [namaPembuat, setNamaPembuat] = useState('');
   const [namaBendahara, setNamaBendahara] = useState('');
   const [namaPimpinan, setNamaPimpinan] = useState('');
+  const [opsiSisa, setOpsiSisa] = useState<'KEMBALI' | 'LANJUT'>('KEMBALI');
   const [submitting, setSubmitting] = useState(false);
 
   // View Modal
@@ -82,6 +83,7 @@ export default function LaporanPage() {
           nama_pembuat: namaPembuat,
           nama_bendahara: namaBendahara,
           nama_pimpinan: namaPimpinan,
+          opsi_sisa: opsiSisa,
           details
         })
       });
