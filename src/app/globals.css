@@ -1,11 +1,6 @@
-@import "tailwindcss";
-
-@theme {
-  --color-muh-green: #0a6336;
-  --color-muh-green-light: #168b4e;
-  --color-muh-green-dark: #064022;
-  --color-muh-gold: #c39a2f;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   body {
