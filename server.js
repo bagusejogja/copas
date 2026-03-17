@@ -1,13 +1,22 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
+const fs = require('fs')
+
+// File Logging
+const logFile = fs.createWriteStream(path.join(__dirname, 'stderr.log'), { flags: 'a' });
+process.stderr.write = logFile.write.bind(logFile);
+process.stdout.write = logFile.write.bind(logFile);
 
 const dev = false
 const hostname = 'localhost'
 const port = process.env.PORT || 3000
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
+
+console.log(`[${new Date().toISOString()}] Starting application...`);
 
 app.prepare().then(() => {
   createServer(async (req, res) => {
@@ -27,4 +36,7 @@ app.prepare().then(() => {
     .listen(port, () => {
       console.log(`> Ready on http://${hostname}:${port}`)
     })
-})
+}).catch((err) => {
+  console.error('App prepare failed:', err);
+  process.exit(1);
+});
