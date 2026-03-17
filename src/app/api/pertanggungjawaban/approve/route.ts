@@ -12,8 +12,16 @@ export async function GET(req: NextRequest) {
     const isTreasurer = payload.role.id === 5 || payload.role.level === 99;
     if (!isTreasurer) return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
 
+    const { searchParams } = new URL(req.url);
+    const filterUnit = searchParams.get('unit_id');
+
+    let whereClause: any = { status: 'SUBMITTED' };
+    if (filterUnit) {
+      whereClause.proposal = { unit_id: Number(filterUnit) };
+    }
+
     const lpjs = await prisma.pertanggungjawaban.findMany({
-      where: { status: 'SUBMITTED' },
+      where: whereClause,
       include: {
         proposal: {
           include: { 
