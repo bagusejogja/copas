@@ -106,6 +106,7 @@ export default function SPJApprovalPage() {
               <tbody className="divide-y divide-gray-50">
                 {lpjs.map(lpj => {
                    const totalCair = lpj.proposal.details.reduce((s:number, d:any) => s + Number(d.nominal), 0);
+                   const isWaiting = lpj.status === 'SUBMITTED';
                    return (
                     <tr key={lpj.id} className="hover:bg-blue-50/30 transition-colors">
                       <td className="px-6 py-5">
@@ -115,7 +116,12 @@ export default function SPJApprovalPage() {
                            </div>
                            <div>
                               <p className="font-black text-gray-900 leading-tight">{lpj.proposal.judul}</p>
-                              <p className="text-[10px] font-bold text-muh-green uppercase mt-1 tracking-wider opacity-70">🏢 {lpj.proposal.unit.nama_unit} · 👤 {lpj.proposal.pemohon.nama}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-[10px] font-bold text-muh-green uppercase tracking-wider opacity-70">🏢 {lpj.proposal.unit.nama_unit}</p>
+                                <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-black ${lpj.status === 'APPROVED_FINAL' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                  {lpj.status}
+                                </span>
+                              </div>
                            </div>
                         </div>
                       </td>
@@ -127,23 +133,35 @@ export default function SPJApprovalPage() {
                            Rp {Number(lpj.total_realisasi).toLocaleString('id-ID')}
                         </span>
                       </td>
-                      <td className="px-6 py-5">
-                        <div className="flex justify-center gap-2">
-                          <button 
-                            disabled={processingId === lpj.id}
-                            onClick={() => handleAction(lpj.id, 'REJECT')}
-                            className="bg-red-50 text-red-600 w-10 h-10 flex items-center justify-center rounded-xl font-black text-sm hover:bg-red-600 hover:text-white transition-all shadow-sm group"
-                            title="Tolak SPJ"
-                          >
-                            ✕
-                          </button>
-                          <button 
-                            disabled={processingId === lpj.id}
-                            onClick={() => handleAction(lpj.id, 'APPROVE')}
-                            className="flex-1 bg-muh-green text-white px-4 py-2 rounded-xl font-black text-xs hover:bg-emerald-700 transition-all shadow-lg hover:shadow-muh-green/20"
-                          >
-                            {processingId === lpj.id ? '...' : '✓ SETUJUI SPJ'}
-                          </button>
+                      <td className="px-6 py-5 text-right">
+                        <div className="flex justify-end gap-2">
+                          {isWaiting ? (
+                            <>
+                              <button 
+                                disabled={processingId === lpj.id}
+                                onClick={() => handleAction(lpj.id, 'REJECT')}
+                                className="bg-red-50 text-red-600 w-10 h-10 flex items-center justify-center rounded-xl font-black text-sm hover:bg-red-600 hover:text-white transition-all shadow-sm group"
+                                title="Tolak SPJ"
+                              >
+                                ✕
+                              </button>
+                              <button 
+                                disabled={processingId === lpj.id}
+                                onClick={() => handleAction(lpj.id, 'APPROVE')}
+                                className="px-4 py-2 bg-muh-green text-white rounded-xl font-black text-xs hover:bg-emerald-700 transition-all shadow-lg hover:shadow-muh-green/20"
+                              >
+                                {processingId === lpj.id ? '...' : '✓ SETUJUI SPJ'}
+                              </button>
+                            </>
+                          ) : (
+                            <button 
+                              disabled={processingId === lpj.id}
+                              onClick={() => handleAction(lpj.id, 'REVERT_DRAFT' as any)}
+                              className="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg font-bold text-[10px] hover:bg-orange-100 hover:text-orange-600 transition-all"
+                            >
+                              ↩ Kembalikan ke Draft
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
