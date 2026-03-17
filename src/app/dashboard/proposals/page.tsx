@@ -102,17 +102,16 @@ export default function ProposalsPage() {
 
   const getStatusBadge = (status: string) => {
     const map: any = {
-      'DRAFT': { label: 'Draf', css: 'bg-gray-100 text-gray-600' },
-      'PENDING': { label: 'Menunggu', css: 'bg-yellow-100 text-yellow-800' },
-      'APPROVED_LV1': { label: 'Disetujui Atasan', css: 'bg-blue-100 text-blue-800' },
-      'APPROVED_LV2': { label: 'Review Pusat', css: 'bg-indigo-100 text-indigo-800' },
-      'APPROVED_FINAL': { label: 'Siap Bayar', css: 'bg-green-100 text-green-800' },
-      'APPROVED_STEP_15': { label: 'Review Keuangan', css: 'bg-purple-100 text-purple-800' },
-      'PAID': { label: 'Sudah Terbayar', css: 'bg-emerald-600 text-white' },
-      'REJECTED': { label: 'Ditolak', css: 'bg-red-100 text-red-800' },
+      'DRAFT': { label: 'Draf', css: 'bg-gray-100 text-gray-500' },
+      'PENDING': { label: 'Menunggu', css: 'bg-orange-50 text-orange-600 border-orange-100' },
+      'APPROVED_LV1': { label: 'Disetujui Atasan', css: 'bg-blue-50 text-blue-600 border-blue-100' },
+      'APPROVED_STEP_15': { label: 'Review Keuangan', css: 'bg-purple-50 text-purple-600 border-purple-100' },
+      'APPROVED_FINAL': { label: 'Siap Bayar', css: 'bg-green-50 text-green-700 border-green-100' },
+      'PAID': { label: 'Sudah Cair', css: 'bg-emerald-600 text-white shadow-sm border-emerald-700' },
+      'REJECTED': { label: 'Ditolak', css: 'bg-red-50 text-red-600 border-red-100' },
     };
     const s = map[status] || { label: status, css: 'bg-gray-100 text-gray-800' };
-    return <span className={`${s.css} px-2 py-1 rounded text-xs font-semibold border shadow-sm`}>{s.label}</span>;
+    return <span className={`${s.css} px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter border shadow-sm`}>{s.label}</span>;
   };
 
   // Stepper logic

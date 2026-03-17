@@ -32,26 +32,32 @@ export async function GET(req: NextRequest) {
       whereClause.unit_id = Number(filterUnit);
     }
 
+    const possibleStatuses = [];
+    
+    // 1. Berdasarkan Flow (Urutan)
+    if (userStepIndex !== -1) {
+      if (userStepIndex === 0) {
+        possibleStatuses.push('PENDING');
+      } else {
+        // Menunggu persetujuan setelah langkah sebelumnya sukses
+        possibleStatuses.push(`APPROVED_STEP_${flows[userStepIndex-1].id}`);
+      }
+    }
+
+    // 2. Berdasarkan Bendahara (Siap Bayar)
+    if (isBendahara) {
+      possibleStatuses.push('APPROVED_FINAL');
+    }
+
+    // 3. Gabungkan dalam whereClause
     if (filterStatus) {
       whereClause.status_terakhir = filterStatus;
     } else {
-      if (isPusat) {
-        whereClause.status_terakhir = { notIn: ['DRAFT', 'REJECTED'] };
+      if (possibleStatuses.length > 0) {
+        whereClause.status_terakhir = { in: possibleStatuses };
       } else {
-        const possibleStatuses = [];
-        if (userStepIndex !== -1) {
-          if (userStepIndex === 0) possibleStatuses.push('PENDING');
-          else possibleStatuses.push(`APPROVED_STEP_${flows[userStepIndex-1].id}`);
-          if (payload.role.level === 3) possibleStatuses.push('APPROVED_LV1');
-          if (payload.role.level === 4) possibleStatuses.push('APPROVED_LV2');
-        }
-        if (isBendahara) possibleStatuses.push('APPROVED_FINAL');
-
-        if (possibleStatuses.length > 0) {
-          whereClause.status_terakhir = { in: possibleStatuses };
-        } else {
-          return NextResponse.json([]);
-        }
+        // Jika tidak punya peran approval sama sekali, berikan hasil kosong
+        return NextResponse.json([]);
       }
     }
 
