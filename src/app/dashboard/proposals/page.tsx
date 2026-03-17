@@ -107,6 +107,7 @@ export default function ProposalsPage() {
       'APPROVED_LV1': { label: 'Disetujui Atasan', css: 'bg-blue-100 text-blue-800' },
       'APPROVED_LV2': { label: 'Review Pusat', css: 'bg-indigo-100 text-indigo-800' },
       'APPROVED_FINAL': { label: 'Siap Bayar', css: 'bg-green-100 text-green-800' },
+      'APPROVED_STEP_15': { label: 'Review Keuangan', css: 'bg-purple-100 text-purple-800' },
       'PAID': { label: 'Sudah Terbayar', css: 'bg-emerald-600 text-white' },
       'REJECTED': { label: 'Ditolak', css: 'bg-red-100 text-red-800' },
     };
@@ -126,7 +127,7 @@ export default function ProposalsPage() {
     if (currentStatus === 'REJECTED') {
       return 'rejected';
     }
-    const weight: any = { 'PENDING': 0, 'APPROVED_LV1': 1, 'APPROVED_LV2': 1, 'APPROVED_FINAL': 2, 'PAID': 3 };
+    const weight: any = { 'PENDING': 0, 'APPROVED_LV1': 1, 'APPROVED_STEP_15': 1.5, 'APPROVED_LV2': 1.5, 'APPROVED_FINAL': 2, 'PAID': 3 };
     const stepWeight: any = { 'SUBMITTED': 0, 'APPROVED_LV1': 1, 'APPROVED_FINAL': 2, 'PAID': 3 };
     if (weight[currentStatus] >= stepWeight[stepKey]) return 'completed';
     return 'pending';
@@ -174,6 +175,7 @@ export default function ProposalsPage() {
               <option value="DRAFT">Draf</option>
               <option value="PENDING">Menunggu Persetujuan</option>
               <option value="APPROVED_FINAL">Disetujui (Siap Bayar)</option>
+              <option value="APPROVED_STEP_15">Review Keuangan</option>
               <option value="PAID">Sudah Terbayar</option>
               <option value="REJECTED">Ditolak</option>
             </select>

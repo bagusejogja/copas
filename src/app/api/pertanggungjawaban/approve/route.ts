@@ -70,7 +70,12 @@ export async function POST(req: NextRequest) {
       });
 
       if (action === 'APPROVE') {
+        const realization = Number(lpj.total_realisasi);
+        const sisa = Number(lpj.sisa_dana);
+        const unitId = Number(lpj.proposal.unit_id);
+
         // 2. Selalu Catat KELUAR di Kas Unit (Realisasi)
+        // Kita gunakan nominal yang dikonversi ke Number agar konsisten di DB
         await tx.kas.create({
           data: {
             tanggal: new Date(),
@@ -78,13 +83,13 @@ export async function POST(req: NextRequest) {
             tipe: 'KELUAR',
             kategori: 'Realisasi Kegiatan (SPJ)',
             deskripsi: `Realisasi kegiatan: ${lpj.proposal.judul}`,
-            nominal: lpj.total_realisasi,
-            unit_id: lpj.proposal.unit_id
+            nominal: realization,
+            unit_id: unitId
           }
         });
 
         // 3. Jika OPSI KEMBALI, urus Kas PDM (Masuk) & Unit (Keluar) untu Sisa
-        if (lpj.opsi_sisa === 'KEMBALI' && Number(lpj.sisa_dana) > 0) {
+        if (lpj.opsi_sisa === 'KEMBALI' && sisa > 0) {
           // Keluar dari Unit (Sisa Dana Balik)
           await tx.kas.create({
             data: {
@@ -93,8 +98,8 @@ export async function POST(req: NextRequest) {
               tipe: 'KELUAR',
               kategori: 'Pengembalian Sisa Dana',
               deskripsi: `Pengembalian sisa dana usulan: ${lpj.proposal.judul}`,
-              nominal: lpj.sisa_dana,
-              unit_id: lpj.proposal.unit_id
+              nominal: sisa,
+              unit_id: unitId
             }
           });
 
@@ -105,8 +110,8 @@ export async function POST(req: NextRequest) {
               proposal_id: lpj.proposal_id,
               tipe: 'MASUK',
               kategori: 'Pengembalian Sisa Dana dari Unit',
-              deskripsi: `Terima sisa dana usulan: ${lpj.proposal.judul} (Unit ID: ${lpj.proposal.unit_id})`,
-              nominal: lpj.sisa_dana,
+              deskripsi: `Terima sisa dana usulan: ${lpj.proposal.judul} (Unit ID: ${unitId})`,
+              nominal: sisa,
               unit_id: 1 // PDM Pusat
             }
           });

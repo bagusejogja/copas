@@ -3,14 +3,22 @@ import { useState, useEffect } from 'react';
 
 export default function KasPage() {
   const [records, setRecords] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState({ masuk: 0, keluar: 0, saldo: 0 });
+  
+  // Filters
+  const [filterUnit, setFilterUnit] = useState<string>('');
 
   const fetchKas = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/kas');
-      const data = await res.json();
+      const query = new URLSearchParams();
+      if (filterUnit) query.set('unit_id', filterUnit);
+
+      const resKas = await fetch('/api/kas?' + query.toString());
+      const data = await resKas.json();
       if (Array.isArray(data)) {
         setRecords(data);
         const m = data.filter(r => r.tipe === 'MASUK').reduce((s, r) => s + Number(r.nominal), 0);
@@ -20,7 +28,16 @@ export default function KasPage() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchKas(); }, []);
+  useEffect(() => {
+    fetch('/api/auth/me').then(res => res.json()).then(data => {
+      setUser(data);
+      if (data?.role?.level === 99 || data?.unit?.id === 1) {
+        fetch('/api/units').then(r => r.json()).then(setUnits);
+      }
+    });
+  }, []);
+
+  useEffect(() => { fetchKas(); }, [filterUnit]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -30,6 +47,33 @@ export default function KasPage() {
           <p className="mt-1 text-gray-500 text-sm font-medium italic">Rekapitulasi Arus Kas & Pembayaran Anggaran</p>
         </div>
       </div>
+
+      {/* FILTER PANEL (For PDM / Admin) */}
+      {(user?.role?.level === 99 || user?.unit?.id === 1) && (
+        <div className="mb-8 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+           <div className="flex-1">
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Pilih Pantauan Unit / Majelis</label>
+              <select 
+                value={filterUnit} 
+                onChange={(e) => setFilterUnit(e.target.value)}
+                className="w-full border-gray-100 rounded-xl p-2.5 text-xs focus:ring-muh-green font-bold"
+              >
+                <option value="">-- Unit Saya (Default) --</option>
+                {units.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.nama_unit}</option>
+                ))}
+              </select>
+           </div>
+           {filterUnit && (
+             <button 
+               onClick={() => setFilterUnit('')}
+               className="mt-5 text-xs text-red-500 font-bold hover:underline"
+             >
+               ✕ Reset
+             </button>
+           )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
          <div className="bg-white p-6 rounded-3xl shadow-xl border-b-4 border-emerald-500">
@@ -61,7 +105,7 @@ export default function KasPage() {
                {loading ? (
                   <tr><td colSpan={5} className="p-10 text-center text-gray-400">Memuat data kas...</td></tr>
                ) : records.length === 0 ? (
-                  <tr><td colSpan={5} className="p-10 text-center text-gray-400 italic">Belum ada transaksi di buku kas.</td></tr>
+                  <tr><td colSpan={5} className="p-10 text-center text-gray-400 italic">Belum ada transaksi di buku kas untuk unit ini.</td></tr>
                ) : records.map((r, i) => (
                   <tr key={i} className="hover:bg-gray-50/50 transition">
                      <td className="px-6 py-4 font-mono text-xs text-gray-400">{new Date(r.tanggal).toLocaleDateString('id-ID')}</td>

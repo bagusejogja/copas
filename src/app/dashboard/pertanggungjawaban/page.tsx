@@ -73,6 +73,36 @@ export default function LaporanPage() {
 
   const calculateTotalRealisasi = () => details.reduce((s, d) => s + Number(d.nominal || 0), 0);
 
+  const onSelectProposal = (p: any) => {
+    setSelected(p);
+    if (p.pertanggungjawabans?.length > 0) {
+      const lpj = p.pertanggungjawabans[0];
+      setRingkasan(lpj.ringkasan || '');
+      setNamaPembuat(lpj.nama_pembuat || user?.nama || '');
+      setNamaBendahara(lpj.nama_bendahara || '');
+      setNamaPimpinan(lpj.nama_pimpinan || '');
+      setOpsiSisa(lpj.opsi_sisa || 'KEMBALI');
+      
+      if (lpj.details?.length > 0) {
+        setDetails(lpj.details.map((d: any) => ({
+          account_id: d.account_id.toString(),
+          keterangan: d.keterangan || '',
+          nominal: d.nominal.toString()
+        })));
+      } else {
+        setDetails([{ account_id: '', keterangan: '', nominal: '' }]);
+      }
+    } else {
+      // New SPJ
+      setRingkasan('');
+      setDetails([{ account_id: '', keterangan: '', nominal: '' }]);
+      setNamaPembuat(user?.nama || '');
+      setNamaBendahara('');
+      setNamaPimpinan('');
+      setOpsiSisa('KEMBALI');
+    }
+  };
+
   const onSave = async (status: 'DRAFT' | 'SUBMITTED') => {
     if (!selected) return;
     
@@ -199,12 +229,12 @@ export default function LaporanPage() {
                           <div className="flex gap-2">
                              <button onClick={() => setViewLpj(p)} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">👁 Lihat LPJ</button>
                              {lpjStatus === 'DRAFT' && canCreate && (
-                               <button onClick={() => setSelected(p)} className="bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">✎ Lanjutkan</button>
+                               <button onClick={() => onSelectProposal(p)} className="bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2">✎ Lanjutkan</button>
                              )}
                           </div>
                        ) : (
                           canCreate && (
-                             <button onClick={() => setSelected(isSelected ? null : p)} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all shadow-lg ${isSelected ? 'bg-gray-100 text-gray-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                             <button onClick={() => isSelected ? setSelected(null) : onSelectProposal(p)} className={`px-6 py-2 rounded-xl font-bold text-sm transition-all shadow-lg ${isSelected ? 'bg-gray-100 text-gray-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
                                 {isSelected ? '✕ Batal' : '+ Buat SPJ'}
                              </button>
                           )

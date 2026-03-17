@@ -10,9 +10,23 @@ export async function GET(req: NextRequest) {
     const payload: any = await verifyToken(token);
     if (!payload) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
 
+    const { searchParams } = new URL(req.url);
+    const filterUnit = searchParams.get('unit_id');
+
     // Filter by unit if not admin/high-level/bendahara
-    const isPusat = payload.role.level === 99 || (payload.unit && payload.unit.id === 1) || payload.role.id === 5;
-    const whereClause = isPusat ? {} : { unit_id: payload.unit?.id };
+    const isAdmin = payload.role.level === 99 || payload.role.id === 5;
+    
+    let whereClause: any = {};
+    if (filterUnit) {
+      if (isAdmin || payload.unit.id === 1) {
+        whereClause.unit_id = Number(filterUnit);
+      } else {
+        whereClause.unit_id = payload.unit?.id;
+      }
+    } else {
+      // Default: Only show current user's unit unless Admin/PDM explicitly asks for others
+      whereClause.unit_id = payload.unit?.id;
+    }
 
     const records = await prisma.kas.findMany({
       where: whereClause,
