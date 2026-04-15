@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import PermissionManager from './PermissionManager';
 
+export const dynamic = 'force-dynamic';
+
 export default async function MenusPage() {
   // Ambil semua daftar Jabatan (Role) dan Menu
   const roles = await prisma.role.findMany({
