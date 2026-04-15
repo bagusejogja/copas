@@ -1,0 +1,9 @@
+ALTER TABLE `Unit` 
+ADD COLUMN `nama_unit_pendek` VARCHAR(191) NULL,
+ADD COLUMN `pemerhati` VARCHAR(191) NULL;
+
+ALTER TABLE `User` 
+ADD COLUMN `nbm` VARCHAR(191) NULL;
+
+ALTER TABLE `ProgramKerja` 
+ADD COLUMN `keterangan` TEXT NULL;

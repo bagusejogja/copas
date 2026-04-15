@@ -10,6 +10,8 @@ datasource db {
 model Unit {
   id             Int            @id @default(autoincrement())
   nama_unit      String
+  nama_unit_pendek String?
+  pemerhati        String?
   parent_unit_id Int?
   parent_unit    Unit?          @relation("UnitHierarchy", fields: [parent_unit_id], references: [id])
   child_units    Unit[]         @relation("UnitHierarchy")
@@ -37,6 +39,7 @@ model User {
   username String    @unique
   password String
   nama     String
+  nbm      String?
   unit_id  Int
   unit     Unit      @relation(fields: [unit_id], references: [id])
   role_id  Int
@@ -238,6 +241,7 @@ model ProgramKerja {
   strategi             String?   @db.Text
   indikator            String?   @db.Text
   anggaran_setahun     Decimal   @db.Decimal(15, 2)
+  keterangan           String?   @db.Text
   tanggal_mulai        DateTime?
   tanggal_selesai      DateTime?
   is_active            Boolean   @default(true)

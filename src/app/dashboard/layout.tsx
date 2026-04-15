@@ -162,7 +162,7 @@ export default function DashboardLayout({
             <div className="h-8 w-8 bg-white/20 rounded-full flex items-center justify-center font-bold text-sm">{user ? user.nama.charAt(0).toUpperCase() : '?'}</div>
             <div className="min-w-0">
               <p className="text-sm font-bold text-white truncate">{user?.nama || '...'}</p>
-              <p className="text-xs text-white/60 truncate">{user?.role?.nama || '-'}</p>
+              <p className="text-xs text-white/60 truncate">{user?.role?.nama || '-'} • {user?.unit?.nama_unit || '-'}</p>
             </div>
           </div>
           <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-white/80 hover:bg-red-500/20 hover:text-red-300 transition-colors text-sm">
@@ -181,7 +181,7 @@ export default function DashboardLayout({
             <div className="flex items-center gap-3">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-gray-900 leading-tight">{user ? user.nama : 'Memuat...'}</p>
-                <p className="text-xs text-muh-green font-semibold">{user ? user.role?.nama : '-'}</p>
+                <p className="text-xs text-muh-green font-semibold">{user ? `${user.role?.nama} • ${user.unit?.nama_unit}` : '-'}</p>
               </div>
               <div className="h-9 w-9 bg-muh-green text-white rounded-full flex items-center justify-center font-bold text-sm">
                 {user ? user.nama.charAt(0).toUpperCase() : '?'}

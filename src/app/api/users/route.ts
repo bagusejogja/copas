@@ -18,6 +18,7 @@ export async function GET() {
        id: u.id,
        username: u.username,
        nama: u.nama,
+       nbm: u.nbm,
        unit: u.unit,
        role: u.role
     }));
@@ -30,7 +31,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { username, password, nama, unit_id, role_id } = await req.json();
+    const { username, password, nama, nbm, unit_id, role_id } = await req.json();
 
     if (!username || !password || !nama || !unit_id || !role_id) {
       return NextResponse.json({ message: 'Semua kolom wajib diisi!' }, { status: 400 });
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
         username,
         password: hashedPassword,
         nama,
+        nbm: nbm || null,
         unit_id: Number(unit_id),
         role_id: Number(role_id)
       }
@@ -62,8 +64,8 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    const { id, nama, role_id, unit_id, password } = await req.json();
-    const updateData: any = { nama, role_id: Number(role_id), unit_id: Number(unit_id) };
+    const { id, nama, nbm, role_id, unit_id, password } = await req.json();
+    const updateData: any = { nama, nbm: nbm || null, role_id: Number(role_id), unit_id: Number(unit_id) };
     if (password && password.trim()) {
       updateData.password = await bcrypt.hash(password, 10);
     }

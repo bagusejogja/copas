@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import * as XLSX from 'xlsx';
 
 const TAHUN_LIST = [2024, 2025, 2026, 2027, 2028];
 
@@ -23,6 +24,8 @@ export default function ProkerPage() {
   const [detailItem, setDetailItem] = useState<any | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [user, setUser] = useState<any>(null);
+  const [showExport, setShowExport] = useState(false);
+  const [exportForm, setExportForm] = useState({ pembuat: '', jabatan_pembuat: '', atasan: '', jabatan_atasan: '' });
 
   const fetchData = async () => {
     setLoading(true);
@@ -99,6 +102,68 @@ export default function ProkerPage() {
     if (!confirm('Hapus Program Kerja ini? Hanya bisa jika belum ada usulan terkait.')) return;
     await fetch('/api/proker', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
     fetchData();
+  };
+
+  const handleExportExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const unitName = prokerList[0]?.unit?.nama_unit || user?.unit?.nama_unit || 'Unit';
+    const title = `Daftar Program Kerja Tahunan ${tahunFilter} - ${unitName}`;
+    
+    const rows: any[][] = [
+      [title],
+      [],
+      ['No', 'Nama Kegiatan', 'Sifat', 'Anggaran (Rp)', 'Uraian Kegiatan', 'Sasaran', 'Tujuan', 'Strategi', 'Indikator', 'Tgl Mulai', 'Tgl Selesai'],
+    ];
+
+    prokerList.forEach((pk: any, i: number) => {
+      rows.push([
+        i + 1,
+        pk.nama_kegiatan,
+        pk.sifat_kegiatan,
+        Number(pk.anggaran_setahun),
+        pk.uraian_kegiatan || '-',
+        pk.sasaran || '-',
+        pk.tujuan || '-',
+        pk.strategi || '-',
+        pk.indikator || '-',
+        pk.tanggal_mulai ? new Date(pk.tanggal_mulai).toLocaleDateString('id-ID') : '-',
+        pk.tanggal_selesai ? new Date(pk.tanggal_selesai).toLocaleDateString('id-ID') : '-',
+      ]);
+    });
+
+    const totalAnggaran = prokerList.reduce((s: number, pk: any) => s + Number(pk.anggaran_setahun), 0);
+    rows.push(['', 'TOTAL', '', totalAnggaran, '', '', '', '', '', '', '']);
+    rows.push([]);
+    rows.push([]);
+    
+    // Kolom TTD (4 kolom terakhir untuk 2 ttd berdampingan)
+    const colA = 'A'; // empty
+    rows.push(['', '', '', '', '', '', '', '', 'Yogyakarta, ' + new Date().toLocaleDateString('id-ID'), '', '']);
+    rows.push([]);
+    rows.push(['', '', '', '', '', '', '', '', 'Pembuat,', '', 'Mengetahui,']);
+    rows.push(['', '', '', '', '', '', '', '', exportForm.jabatan_pembuat || '...............', '', exportForm.jabatan_atasan || '...............']);
+    rows.push([]);
+    rows.push([]);
+    rows.push([]);
+    rows.push([]);
+    rows.push([]);
+    rows.push(['', '', '', '', '', '', '', '', `( ${exportForm.pembuat || '.....................'} )`, '', `( ${exportForm.atasan || '.....................'} )`]);
+    rows.push(['', '', '', '', '', '', '', '', exportForm.jabatan_pembuat || '', '', exportForm.jabatan_atasan || '']);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    
+    // Merge title row
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }
+    ];
+    ws['!cols'] = [
+      { wch: 4 }, { wch: 35 }, { wch: 8 }, { wch: 18 }, { wch: 25 },
+      { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 14 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Proker');
+    XLSX.writeFile(wb, `Proker_${unitName.replace(/\s/g,'_')}_${tahunFilter}.xlsx`);
+    setShowExport(false);
   };
 
   const getProkerStats = (pk: any) => {
@@ -306,6 +371,47 @@ export default function ProkerPage() {
         </div>
       )}
 
+      {/* Export Modal */}
+      {showExport && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-muh-green-dark text-white rounded-t-2xl">
+              <h2 className="font-bold text-lg">📥 Download Format Excel</h2>
+              <button onClick={() => setShowExport(false)} className="text-white/80 hover:text-white text-2xl">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">Isikan nama penandatangan untuk dicantumkan di bagian bawah dokumen:</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Pembuat</label>
+                  <input type="text" value={exportForm.pembuat} onChange={e => setExportForm(f => ({ ...f, pembuat: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Nama lengkap" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Jabatan Pembuat</label>
+                  <input type="text" value={exportForm.jabatan_pembuat} onChange={e => setExportForm(f => ({ ...f, jabatan_pembuat: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Ketua Majelis" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Atasan / Mengetahui</label>
+                  <input type="text" value={exportForm.atasan} onChange={e => setExportForm(f => ({ ...f, atasan: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Nama lengkap" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Jabatan Atasan</label>
+                  <input type="text" value={exportForm.jabatan_atasan} onChange={e => setExportForm(f => ({ ...f, jabatan_atasan: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Ketua PDM" />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowExport(false)} className="flex-1 px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Batal</button>
+                <button type="button" onClick={handleExportExcel} className="flex-1 bg-muh-green text-white font-bold py-2 rounded-lg hover:bg-muh-green-dark">📥 Download Excel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6 flex items-center justify-between gap-4 border-b pb-4">
         <div>
@@ -316,6 +422,12 @@ export default function ProkerPage() {
           <select value={tahunFilter} onChange={e => setTahunFilter(e.target.value)} className="border border-gray-300 rounded-lg p-2 text-sm bg-white font-semibold">
             {TAHUN_LIST.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
+          {prokerList.length > 0 && (
+            <button onClick={() => setShowExport(true)}
+              className="bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md text-sm flex items-center gap-2">
+              📥 Download Excel
+            </button>
+          )}
           {isPeriodOpen() && (
             <button onClick={() => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true); }}
               className="bg-muh-green text-white font-bold px-5 py-2 rounded-lg hover:bg-muh-green-dark shadow-md">

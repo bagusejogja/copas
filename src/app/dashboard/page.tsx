@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [unitsInfo, setUnitsInfo] = useState<any[]>([]);
   const [unitFilter, setUnitFilter] = useState<string>('');
   const [user, setUser] = useState<any>(null);
+  const [openUnits, setOpenUnits] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch('/api/auth/me').then(res => res.json()).then(setUser);
@@ -235,41 +236,88 @@ export default function DashboardPage() {
             <h2 className="text-base font-bold text-gray-800">Monitoring Program Kerja Tahunan</h2>
             <span className="text-xs text-gray-400">{data?.prokerSummary.length ?? 0} program</span>
           </div>
-          <div className="overflow-x-auto">
+          <div>
             {!data?.prokerSummary.length ? (
               <p className="p-6 text-sm text-gray-500">Belum ada data Program Kerja Tahunan.</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 text-gray-500 uppercase font-black tracking-wider">
-                  <tr>
-                    <th className="px-4 py-3 text-left">Nama Kegiatan</th>
-                    <th className="px-4 py-3 text-right">Anggaran</th>
-                    <th className="px-4 py-3 text-right text-gray-400">Pengajuan</th>
-                    <th className="px-4 py-3 text-right text-muh-green">Disetujui</th>
-                    <th className="px-4 py-3 text-right text-orange-600">Diambil</th>
-                    <th className="px-4 py-3 text-right text-blue-600">Dilaporkan (SPJ)</th>
-                    <th className="px-4 py-3 text-right font-black">Sisa Anggaran</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {data?.prokerSummary.map(pk => (
-                    <tr key={pk.id} className="hover:bg-gray-50/70 transition">
-                      <td className="px-4 py-3 font-semibold text-gray-800">{pk.nama_kegiatan}</td>
-                      <td className="px-4 py-3 text-right font-mono">Rp {fmt(pk.anggaran)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-gray-400">Rp {fmt(pk.diajukan)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-muh-green font-bold">Rp {fmt(pk.disetujui)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-orange-600 font-bold">Rp {fmt(pk.diambil)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-blue-600 font-bold">Rp {fmt(pk.dilaporkan)}</td>
-                      <td className={`px-4 py-3 text-right font-mono font-black ${pk.sisa < (pk.anggaran * 0.1) ? 'text-red-600' : 'text-muh-green'}`}>
-                        Rp {fmt(pk.sisa)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            ) : (() => {
+              // Group proker by unit
+              const grouped: Record<string, { unit_nama: string; items: typeof data.prokerSummary }> = {};
+              data.prokerSummary.forEach((pk: any) => {
+                const key = String(pk.unit_id || 'lainnya');
+                if (!grouped[key]) grouped[key] = { unit_nama: pk.unit_nama || 'Unit Lain', items: [] };
+                grouped[key].items.push(pk);
+              });
+              const groupKeys = Object.keys(grouped);
+              return (
+                <div className="divide-y divide-gray-100">
+                  {groupKeys.map((key) => {
+                    const grp = grouped[key];
+                    const isOpen = openUnits.has(key);
+                    const totalAnggaran = grp.items.reduce((s: number, pk: any) => s + pk.anggaran, 0);
+                    const totalSisa = grp.items.reduce((s: number, pk: any) => s + pk.sisa, 0);
+                    return (
+                      <div key={key}>
+                        {/* Unit Header - Clickable to expand */}
+                        <button
+                          onClick={() => setOpenUnits(prev => {
+                            const next = new Set(prev);
+                            if (next.has(key)) next.delete(key); else next.add(key);
+                            return next;
+                          })}
+                          className="w-full flex items-center justify-between px-5 py-3 bg-gray-50 hover:bg-green-50/50 transition"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className={`text-gray-400 text-xs transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                            <p className="font-bold text-sm text-gray-800">{grp.unit_nama}</p>
+                            <span className="text-xs bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">{grp.items.length} program</span>
+                          </div>
+                          <div className="flex gap-6 text-xs font-mono text-gray-500">
+                            <span>Anggaran: <strong className="text-gray-800">Rp {fmt(totalAnggaran)}</strong></span>
+                            <span>Sisa: <strong className={totalSisa < totalAnggaran * 0.1 ? 'text-red-600' : 'text-muh-green'}>Rp {fmt(totalSisa)}</strong></span>
+                          </div>
+                        </button>
+                        {/* Kegiatan rows - default collapsed */}
+                        {isOpen && (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead className="bg-gray-50/70 text-gray-400 uppercase font-black tracking-wider border-y border-gray-100">
+                                <tr>
+                                  <th className="px-6 py-2 text-left">Nama Kegiatan</th>
+                                  <th className="px-4 py-2 text-right">Anggaran</th>
+                                  <th className="px-4 py-2 text-right text-gray-400">Pengajuan</th>
+                                  <th className="px-4 py-2 text-right text-muh-green">Disetujui</th>
+                                  <th className="px-4 py-2 text-right text-orange-600">Diambil</th>
+                                  <th className="px-4 py-2 text-right text-blue-600">SPJ</th>
+                                  <th className="px-4 py-2 text-right font-black">Sisa</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-50">
+                                {grp.items.map((pk: any) => (
+                                  <tr key={pk.id} className="hover:bg-gray-50/70 transition">
+                                    <td className="px-6 py-2.5 font-semibold text-gray-700">{pk.nama_kegiatan}</td>
+                                    <td className="px-4 py-2.5 text-right font-mono">Rp {fmt(pk.anggaran)}</td>
+                                    <td className="px-4 py-2.5 text-right font-mono text-gray-400">Rp {fmt(pk.diajukan)}</td>
+                                    <td className="px-4 py-2.5 text-right font-mono text-muh-green font-bold">Rp {fmt(pk.disetujui)}</td>
+                                    <td className="px-4 py-2.5 text-right font-mono text-orange-600 font-bold">Rp {fmt(pk.diambil)}</td>
+                                    <td className="px-4 py-2.5 text-right font-mono text-blue-600 font-bold">Rp {fmt(pk.dilaporkan)}</td>
+                                    <td className={`px-4 py-2.5 text-right font-mono font-black ${pk.sisa < (pk.anggaran * 0.1) ? 'text-red-600' : 'text-muh-green'}`}>
+                                      Rp {fmt(pk.sisa)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
+
 
         {/* Tabel rekap per Unit */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

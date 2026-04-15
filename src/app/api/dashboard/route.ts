@@ -3,9 +3,12 @@ import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: Request) {
   console.log("Dashboard API called"); // Logging for debugging
   try {
+    const { searchParams } = new URL(req.url);
+    const unitIdParam = searchParams.get('unit_id');
+
     const cookieStore = await cookies();
     const token = cookieStore.get('token')?.value;
     let payload: any = null;
@@ -21,10 +24,19 @@ export async function GET() {
     // Role check
     const isPusat = !payload || (payload.role && payload.role.level === 99) || (payload.unit && payload.unit.id === 1);
     
+    // If admin/pusat selects a specific unit filter from dropdown, apply it
+    const selectedUnitId = isPusat && unitIdParam ? Number(unitIdParam) : null;
+
     // Filters
-    const prokerWhere = isPusat ? {} : { unit_id: payload?.unit?.id };
-    const proposalWhere = isPusat ? { NOT: { status_terakhir: 'DRAFT' } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: 'DRAFT' } };
-    const unitFilter = isPusat ? {} : { id: payload?.unit?.id };
+    const prokerWhere = selectedUnitId 
+      ? { unit_id: selectedUnitId } 
+      : isPusat ? {} : { unit_id: payload?.unit?.id };
+    const proposalWhere = selectedUnitId
+      ? { unit_id: selectedUnitId, NOT: { status_terakhir: 'DRAFT' } }
+      : isPusat ? { NOT: { status_terakhir: 'DRAFT' } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: 'DRAFT' } };
+    const unitFilter = selectedUnitId 
+      ? { id: selectedUnitId } 
+      : isPusat ? {} : { id: payload?.unit?.id };
 
     // 3. Ambil Nama semua dynamic steps untuk filter PENDING
     const flows = await prisma.approvalFlow.findMany({ where: { is_active: true } });
@@ -119,6 +131,7 @@ export async function GET() {
     const prokerData = await prisma.programKerja.findMany({
       where: prokerWhere,
       include: {
+        unit: true,
         proposals: {
           where: {
             NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } }
@@ -128,7 +141,8 @@ export async function GET() {
              pertanggungjawabans: true 
           }
         }
-      }
+      },
+      orderBy: [{ unit_id: 'asc' }, { id: 'asc' }]
     }).catch(() => []);
 
     const prokerSummary = (prokerData || []).map((pk: any) => {
@@ -154,6 +168,8 @@ export async function GET() {
       
       return {
         id: pk.id,
+        unit_id: pk.unit_id,
+        unit_nama: pk.unit?.nama_unit || '-',
         nama_kegiatan: pk.nama_kegiatan,
         anggaran,
         diajukan: diajukanRow,

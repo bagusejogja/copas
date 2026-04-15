@@ -1,20 +1,28 @@
 "use client";
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
-type User = { id: number; nama: string; username: string; role: { id: number; nama_jabatan: string }; unit: { id: number; nama_unit: string } };
+type User = { 
+  id: number; 
+  nama: string; 
+  nbm?: string; 
+  username: string; 
+  role: { id: number; nama_jabatan: string }; 
+  unit: { id: number; nama_unit: string } 
+};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<{id: number, nama_jabatan: string}[]>([]);
   const [units, setUnits] = useState<{id: number, nama_unit: string}[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ nama: '', username: '', password: '', role_id: '', unit_id: '' });
+  const [form, setForm] = useState({ nama: '', nbm: '', username: '', password: '', role_id: '', unit_id: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Edit state
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [editForm, setEditForm] = useState({ nama: '', role_id: '', unit_id: '', password: '' });
+  const [editForm, setEditForm] = useState({ nama: '', nbm: '', role_id: '', unit_id: '', password: '' });
   const [editing, setEditing] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
@@ -36,14 +44,14 @@ export default function UsersPage() {
     try {
       const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       const data = await res.json();
-      if (res.ok) { setForm({ nama: '', username: '', password: '', role_id: '', unit_id: '' }); fetchData(); }
+      if (res.ok) { setForm({ nama: '', nbm: '', username: '', password: '', role_id: '', unit_id: '' }); fetchData(); }
       else setErrorMsg(data.message);
     } finally { setIsSubmitting(false); }
   };
 
   const openEdit = (u: User) => {
     setEditUser(u);
-    setEditForm({ nama: u.nama, role_id: String(u.role.id), unit_id: String(u.unit.id), password: '' });
+    setEditForm({ nama: u.nama, nbm: u.nbm || '', role_id: String(u.role.id), unit_id: String(u.unit.id), password: '' });
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -67,6 +75,9 @@ export default function UsersPage() {
     fetchData();
   };
 
+  const roleOptions = roles.map(r => ({ value: String(r.id), label: r.nama_jabatan }));
+  const unitOptions = units.map(u => ({ value: String(u.id), label: u.nama_unit }));
+
   return (
     <div className="p-6">
       <div className="mb-6 border-b pb-4">
@@ -87,26 +98,39 @@ export default function UsersPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Username (tidak bisa diubah)</label>
                 <input disabled value={editUser.username} className="w-full border border-gray-200 rounded-lg p-2.5 text-sm bg-gray-50 text-gray-500" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap *</label>
-                <input required type="text" value={editForm.nama} onChange={e => setEditForm(f => ({ ...f, nama: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap *</label>
+                  <input required type="text" value={editForm.nama} onChange={e => setEditForm(f => ({ ...f, nama: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" />
+                </div>
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">NBM</label>
+                   <input type="text" value={editForm.nbm} onChange={e => setEditForm(f => ({ ...f, nbm: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Opsional" />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Jabatan (Role) *</label>
-                <select required value={editForm.role_id} onChange={e => setEditForm(f => ({ ...f, role_id: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white">
-                  <option value="">-- Pilih Jabatan --</option>
-                  {roles.map(r => <option key={r.id} value={r.id}>{r.nama_jabatan}</option>)}
-                </select>
+                <Select 
+                  placeholder="-- Ketik / Cari Jabatan --"
+                  required
+                  options={roleOptions} 
+                  value={roleOptions.find(o => o.value === editForm.role_id) || null}
+                  onChange={(val: any) => setEditForm(f => ({ ...f, role_id: val?.value || '' }))}
+                  className="text-sm"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Unit / Majelis *</label>
-                <select required value={editForm.unit_id} onChange={e => setEditForm(f => ({ ...f, unit_id: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white">
-                  <option value="">-- Pilih Unit --</option>
-                  {units.map(u => <option key={u.id} value={u.id}>{u.nama_unit}</option>)}
-                </select>
+                 <Select 
+                  placeholder="-- Ketik / Cari Unit --"
+                  required
+                  options={unitOptions} 
+                  value={unitOptions.find(o => o.value === editForm.unit_id) || null}
+                  onChange={(val: any) => setEditForm(f => ({ ...f, unit_id: val?.value || '' }))}
+                  className="text-sm"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Password Baru <span className="text-gray-400">(kosongkan jika tidak diubah)</span></label>
@@ -130,22 +154,36 @@ export default function UsersPage() {
           <h3 className="font-semibold text-lg text-gray-800 border-b pb-3 mb-4">Buat Akun Baru</h3>
           {errorMsg && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg">{errorMsg}</div>}
           <form onSubmit={handleCreate} className="space-y-4">
-            <div><label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap <span className="text-red-500">*</span></label>
-              <input required type="text" name="nama" value={form.nama} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap <span className="text-red-500">*</span></label>
+                <input required type="text" name="nama" value={form.nama} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">NBM</label>
+                <input type="text" name="nbm" value={form.nbm} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Sbg Pegawai" /></div>
+            </div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Username <span className="text-red-500">*</span></label>
               <input required type="text" name="username" value={form.username} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-500">*</span></label>
               <input required type="password" name="password" value={form.password} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Jabatan <span className="text-red-500">*</span></label>
-              <select required name="role_id" value={form.role_id} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white">
-                <option value="">-- Pilih Jabatan --</option>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.nama_jabatan}</option>)}
-              </select></div>
+              <Select 
+                  placeholder="-- Ketik / Cari Jabatan --"
+                  required
+                  options={roleOptions} 
+                  value={roleOptions.find(o => o.value === form.role_id) || null}
+                  onChange={(val: any) => setForm({ ...form, role_id: val?.value || '' })}
+                  className="text-sm"
+              />
+            </div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Unit <span className="text-red-500">*</span></label>
-              <select required name="unit_id" value={form.unit_id} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white">
-                <option value="">-- Pilih Unit / Majelis --</option>
-                {units.map(u => <option key={u.id} value={u.id}>{u.nama_unit}</option>)}
-              </select></div>
+             <Select 
+                  placeholder="-- Ketik / Cari Unit --"
+                  required
+                  options={unitOptions} 
+                  value={unitOptions.find(o => o.value === form.unit_id) || null}
+                  onChange={(val: any) => setForm({ ...form, unit_id: val?.value || '' })}
+                  className="text-sm"
+              />
+            </div>
             <button type="submit" disabled={isSubmitting} className="w-full bg-muh-green text-white font-bold rounded-lg py-2.5 hover:bg-muh-green-dark transition">
               {isSubmitting ? 'Memproses...' : '+ Tambah Pengguna'}
             </button>
@@ -159,7 +197,7 @@ export default function UsersPage() {
               <table className="w-full text-sm text-left text-gray-600">
                 <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
                   <tr>
-                    <th className="px-5 py-4">Nama & Username</th>
+                    <th className="px-5 py-4">Nama & Username / NBM</th>
                     <th className="px-5 py-4">Jabatan</th>
                     <th className="px-5 py-4">Unit</th>
                     <th className="px-5 py-4 text-center">Aksi</th>
@@ -172,7 +210,7 @@ export default function UsersPage() {
                     <tr key={u.id} className="hover:bg-gray-50/80">
                       <td className="px-5 py-4">
                         <p className="font-bold text-gray-900">{u.nama}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">@{u.username}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">@{u.username} • {u.nbm ? `NBM: ${u.nbm}` : 'NBM: -'}</p>
                       </td>
                       <td className="px-5 py-4 font-medium text-blue-700">{u.role.nama_jabatan}</td>
                       <td className="px-5 py-4">

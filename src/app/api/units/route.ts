@@ -17,7 +17,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { nama_unit, parent_unit_id } = await req.json();
+    const { nama_unit, nama_unit_pendek, pemerhati, parent_unit_id } = await req.json();
 
     if (!nama_unit) {
       return NextResponse.json({ message: 'Nama unit wajib diisi' }, { status: 400 });
@@ -26,6 +26,8 @@ export async function POST(req: Request) {
     const unit = await prisma.unit.create({
       data: {
         nama_unit,
+        nama_unit_pendek: nama_unit_pendek || null,
+        pemerhati: pemerhati || null,
         parent_unit_id: parent_unit_id ? Number(parent_unit_id) : null
       }
     });

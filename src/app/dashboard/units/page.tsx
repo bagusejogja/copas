@@ -9,6 +9,8 @@ export default function UnitsPage() {
   
   // form state
   const [namaUnit, setNamaUnit] = useState('');
+  const [namaUnitPendek, setNamaUnitPendek] = useState('');
+  const [pemerhati, setPemerhati] = useState('');
   const [parentUnitId, setParentUnitId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,12 +34,16 @@ export default function UnitsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-           nama_unit: namaUnit, 
+           nama_unit: namaUnit,
+           nama_unit_pendek: namaUnitPendek || null,
+           pemerhati: pemerhati || null,
            parent_unit_id: parentUnitId || null 
         })
       });
       if (res.ok) {
         setNamaUnit('');
+        setNamaUnitPendek('');
+        setPemerhati('');
         setParentUnitId('');
         fetchUnits();
       }
@@ -70,6 +76,28 @@ export default function UnitsPage() {
                   onChange={e => setNamaUnit(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-muh-green focus:border-muh-green text-sm"
                   placeholder="Contoh: Majelis Tabligh Kota"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Singkatan / Nama Pendek <span className="text-gray-400">(Opsional)</span></label>
+                <input 
+                  type="text" 
+                  value={namaUnitPendek}
+                  onChange={e => setNamaUnitPendek(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-muh-green focus:border-muh-green text-sm"
+                  placeholder="Contoh: MT"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pemerhati <span className="text-gray-400">(Opsional)</span></label>
+                <input 
+                  type="text" 
+                  value={pemerhati}
+                  onChange={e => setPemerhati(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-muh-green focus:border-muh-green text-sm"
+                  placeholder="Nama Pemerhati Unit"
                 />
               </div>
               
@@ -111,27 +139,31 @@ export default function UnitsPage() {
                    <tr>
                      <th className="px-6 py-4 w-16 text-center">ID</th>
                      <th className="px-6 py-4">Nama Unit</th>
+                     <th className="px-6 py-4">Singkatan</th>
+                     <th className="px-6 py-4">Pemerhati</th>
                      <th className="px-6 py-4">Induk (Parent Unit)</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y">
-                   {units.length === 0 ? (
-                      <tr><td colSpan={3} className="px-6 py-4 text-center">Belum ada data unit.</td></tr>
-                   ) : units.map(u => (
-                     <tr key={u.id} className="hover:bg-gray-50">
-                       <td className="px-6 py-4 text-center font-medium">{u.id}</td>
-                       <td className="px-6 py-4 font-bold text-gray-800">{u.nama_unit}</td>
-                       <td className="px-6 py-4">
-                          {u.parent_unit ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                              {u.parent_unit.nama_unit}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 italic text-xs">Pusat / Teratas</span>
-                          )}
-                       </td>
-                     </tr>
-                   ))}
+                    {units.length === 0 ? (
+                       <tr><td colSpan={5} className="px-6 py-4 text-center">Belum ada data unit.</td></tr>
+                    ) : units.map((u: any) => (
+                      <tr key={u.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-center font-medium">{u.id}</td>
+                        <td className="px-6 py-4 font-bold text-gray-800">{u.nama_unit}</td>
+                        <td className="px-6 py-4 text-gray-600">{u.nama_unit_pendek || '-'}</td>
+                        <td className="px-6 py-4 text-gray-600">{u.pemerhati || '-'}</td>
+                        <td className="px-6 py-4">
+                           {u.parent_unit ? (
+                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                               {u.parent_unit.nama_unit}
+                             </span>
+                           ) : (
+                             <span className="text-gray-400 italic text-xs">Pusat / Teratas</span>
+                           )}
+                        </td>
+                      </tr>
+                    ))}
                  </tbody>
                </table>
              </div>
