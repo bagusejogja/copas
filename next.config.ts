@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    cpus: 1, // Membatasi proses agar tidak menabrak batas nproc di cPanel
+    workerThreads: false,
+    memoryBasedWorkersCount: true,
+  },
+  // swcMinify: false kadang juga bisa menghemat crash untuk versi Next.js tertentu
 };
 
 export default nextConfig;
