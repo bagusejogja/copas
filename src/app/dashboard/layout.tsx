@@ -28,8 +28,13 @@ export default function DashboardLayout({
   };
 
   const hasPermission = (path: string) => {
-    if (!user || !user.permissions) return false;
+    if (!user) return false;
+    // Super Admin otomatis bisa akses semua menu
+    if (user.role?.nama === 'Super Admin') return true;
+    
     if (path === '/dashboard') return true;
+    if (!user.permissions) return false;
+    
     const p = user.permissions.find((perm: any) => perm.menu.path === path);
     return p ? p.can_read : false;
   };
