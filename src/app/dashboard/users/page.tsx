@@ -24,8 +24,12 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ nama: '', nbm: '', role_id: '', unit_id: '', password: '' });
   const [editing, setEditing] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    setIsMounted(true);
+    fetchData(); 
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -112,25 +116,31 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Jabatan (Role) *</label>
-                <Select 
-                  placeholder="-- Ketik / Cari Jabatan --"
-                  required
-                  options={roleOptions} 
-                  value={roleOptions.find(o => o.value === editForm.role_id) || null}
-                  onChange={(val: any) => setEditForm(f => ({ ...f, role_id: val?.value || '' }))}
-                  className="text-sm"
-                />
+                {isMounted && (
+                  <Select 
+                    instanceId="edit-role-select"
+                    placeholder="-- Ketik / Cari Jabatan --"
+                    required
+                    options={roleOptions} 
+                    value={roleOptions.find(o => o.value === editForm.role_id) || null}
+                    onChange={(val: any) => setEditForm(f => ({ ...f, role_id: val?.value || '' }))}
+                    className="text-sm"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Unit / Majelis *</label>
-                 <Select 
-                  placeholder="-- Ketik / Cari Unit --"
-                  required
-                  options={unitOptions} 
-                  value={unitOptions.find(o => o.value === editForm.unit_id) || null}
-                  onChange={(val: any) => setEditForm(f => ({ ...f, unit_id: val?.value || '' }))}
-                  className="text-sm"
-                />
+                {isMounted && (
+                   <Select 
+                    instanceId="edit-unit-select"
+                    placeholder="-- Ketik / Cari Unit --"
+                    required
+                    options={unitOptions} 
+                    value={unitOptions.find(o => o.value === editForm.unit_id) || null}
+                    onChange={(val: any) => setEditForm(f => ({ ...f, unit_id: val?.value || '' }))}
+                    className="text-sm"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Password Baru <span className="text-gray-400">(kosongkan jika tidak diubah)</span></label>
@@ -165,24 +175,30 @@ export default function UsersPage() {
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-500">*</span></label>
               <input required type="password" name="password" value={form.password} onChange={handleChange} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Jabatan <span className="text-red-500">*</span></label>
-              <Select 
-                  placeholder="-- Ketik / Cari Jabatan --"
-                  required
-                  options={roleOptions} 
-                  value={roleOptions.find(o => o.value === form.role_id) || null}
-                  onChange={(val: any) => setForm({ ...form, role_id: val?.value || '' })}
-                  className="text-sm"
-              />
+              {isMounted && (
+                <Select 
+                    instanceId="create-role-select"
+                    placeholder="-- Ketik / Cari Jabatan --"
+                    required
+                    options={roleOptions} 
+                    value={roleOptions.find(o => o.value === form.role_id) || null}
+                    onChange={(val: any) => setForm({ ...form, role_id: val?.value || '' })}
+                    className="text-sm"
+                />
+              )}
             </div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Unit <span className="text-red-500">*</span></label>
-             <Select 
+             {isMounted && (
+               <Select 
+                  instanceId="create-unit-select"
                   placeholder="-- Ketik / Cari Unit --"
                   required
                   options={unitOptions} 
                   value={unitOptions.find(o => o.value === form.unit_id) || null}
                   onChange={(val: any) => setForm({ ...form, unit_id: val?.value || '' })}
                   className="text-sm"
-              />
+                />
+             )}
             </div>
             <button type="submit" disabled={isSubmitting} className="w-full bg-muh-green text-white font-bold rounded-lg py-2.5 hover:bg-muh-green-dark transition">
               {isSubmitting ? 'Memproses...' : '+ Tambah Pengguna'}

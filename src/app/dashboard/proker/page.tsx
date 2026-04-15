@@ -25,7 +25,27 @@ export default function ProkerPage() {
   const [settings, setSettings] = useState<any>({});
   const [user, setUser] = useState<any>(null);
   const [showExport, setShowExport] = useState(false);
-  const [exportForm, setExportForm] = useState({ pembuat: '', jabatan_pembuat: '', atasan: '', jabatan_atasan: '' });
+  const [exportForm, setExportForm] = useState({ 
+    pemerhati: '', nbm_pemerhati: '', 
+    ketua: '', nbm_ketua: '', 
+    sekretaris: '', nbm_sekretaris: '' 
+  });
+
+  useEffect(() => {
+    if (showExport && prokerList.length > 0) {
+      const unit = prokerList[0]?.unit;
+      const ketua = unit?.users?.find((u: any) => Number(u.role_id) === 102);
+      
+      setExportForm({
+        pemerhati: unit?.pemerhati || '',
+        nbm_pemerhati: '',
+        ketua: ketua?.nama || '',
+        nbm_ketua: ketua?.nbm || '',
+        sekretaris: user?.nama || '',
+        nbm_sekretaris: user?.nbm || ''
+      });
+    }
+  }, [showExport, prokerList, user]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -104,65 +124,162 @@ export default function ProkerPage() {
     fetchData();
   };
 
-  const handleExportExcel = () => {
-    const wb = XLSX.utils.book_new();
-    const unitName = prokerList[0]?.unit?.nama_unit || user?.unit?.nama_unit || 'Unit';
-    const title = `Daftar Program Kerja Tahunan ${tahunFilter} - ${unitName}`;
-    
-    const rows: any[][] = [
-      [title],
-      [],
-      ['No', 'Nama Kegiatan', 'Sifat', 'Anggaran (Rp)', 'Uraian Kegiatan', 'Sasaran', 'Tujuan', 'Strategi', 'Indikator', 'Tgl Mulai', 'Tgl Selesai'],
-    ];
+  const handleExportExcel = async () => {
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Program Kerja', {
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.2, right: 0.2, top: 0.2, bottom: 0.2, header: 0, footer: 0 } }
+    });
 
+    const unit = prokerList[0]?.unit || user?.unit;
+    const unitName = (unit?.nama_unit || 'Unit').toUpperCase();
+
+    // 1. Header
+    worksheet.mergeCells('A1:J1');
+    worksheet.mergeCells('A2:J2');
+    worksheet.mergeCells('A3:J3');
+    
+    const h1 = worksheet.getCell('A1'); h1.value = 'PIMPINAN DAERAH MUHAMMADIYAH KOTA YOGYAKARTA';
+    const h2 = worksheet.getCell('A2'); h2.value = `PROGRAM KERJA JANUARI-DESEMBER TAHUN ${tahunFilter}`;
+    const h3 = worksheet.getCell('A3'); h3.value = unitName;
+    
+    [h1, h2, h3].forEach(cell => {
+      cell.font = { bold: true, size: 12 };
+      cell.alignment = { horizontal: 'center' };
+    });
+
+    // 2. Table Header
+    const headers = ['No', 'Jenis Kegiatan', 'Sifat', 'Uraian Kegiatan', 'Sasaran Kegiatan', 'Tujuan', 'Strategi Kegiatan', 'Indikator Ketercapaian', 'Dana (Rp)', 'Tanggal Pelaksanaan'];
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true };
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    });
+
+    // 3. Data Rows
     prokerList.forEach((pk: any, i: number) => {
-      rows.push([
+      const fmtDate = (d: any) => d ? new Date(d) : null;
+      const start = fmtDate(pk.tanggal_mulai);
+      const end = fmtDate(pk.tanggal_selesai);
+      let tglStr = '-';
+
+      if (start) {
+        const d1 = start.getDate();
+        const m1 = start.toLocaleDateString('id-ID', { month: 'long' });
+        const y1 = start.getFullYear();
+
+        if (!end || start.getTime() === end.getTime()) {
+          tglStr = `${d1} ${m1} ${y1}`;
+        } else {
+          const d2 = end.getDate();
+          const m2 = end.toLocaleDateString('id-ID', { month: 'long' });
+          const y2 = end.getFullYear();
+          
+          // Cek apakah 1 bulan penuh (tanggal 1 s.d tanggal terakhir bulan tersebut)
+          const lastDay = new Date(y2, end.getMonth() + 1, 0).getDate();
+          
+          if (m1 === m2 && y1 === y2) {
+            if (d1 === 1 && d2 === lastDay) {
+              tglStr = `${m1} ${y1}`; // Full 1 bulan
+            } else {
+              tglStr = `${d1} - ${d2} ${m1} ${y1}`; // Sebagian bulan
+            }
+          } else {
+            tglStr = `Antara ${d1} ${m1} ${y1} sampai ${d2} ${m2} ${y2}`;
+          }
+        }
+      }
+
+      const rowData = [
         i + 1,
         pk.nama_kegiatan,
         pk.sifat_kegiatan,
-        Number(pk.anggaran_setahun),
         pk.uraian_kegiatan || '-',
         pk.sasaran || '-',
         pk.tujuan || '-',
         pk.strategi || '-',
         pk.indikator || '-',
-        pk.tanggal_mulai ? new Date(pk.tanggal_mulai).toLocaleDateString('id-ID') : '-',
-        pk.tanggal_selesai ? new Date(pk.tanggal_selesai).toLocaleDateString('id-ID') : '-',
-      ]);
+        Number(pk.anggaran_setahun),
+        tglStr,
+      ];
+      const row = worksheet.addRow(rowData);
+      row.eachCell((cell) => {
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        cell.alignment = { vertical: 'top', wrapText: true };
+      });
+      row.getCell(9).numFmt = '#,##0';
     });
 
+    // 4. Summary Row
     const totalAnggaran = prokerList.reduce((s: number, pk: any) => s + Number(pk.anggaran_setahun), 0);
-    rows.push(['', 'TOTAL', '', totalAnggaran, '', '', '', '', '', '', '']);
-    rows.push([]);
-    rows.push([]);
-    
-    // Kolom TTD (4 kolom terakhir untuk 2 ttd berdampingan)
-    const colA = 'A'; // empty
-    rows.push(['', '', '', '', '', '', '', '', 'Yogyakarta, ' + new Date().toLocaleDateString('id-ID'), '', '']);
-    rows.push([]);
-    rows.push(['', '', '', '', '', '', '', '', 'Pembuat,', '', 'Mengetahui,']);
-    rows.push(['', '', '', '', '', '', '', '', exportForm.jabatan_pembuat || '...............', '', exportForm.jabatan_atasan || '...............']);
-    rows.push([]);
-    rows.push([]);
-    rows.push([]);
-    rows.push([]);
-    rows.push([]);
-    rows.push(['', '', '', '', '', '', '', '', `( ${exportForm.pembuat || '.....................'} )`, '', `( ${exportForm.atasan || '.....................'} )`]);
-    rows.push(['', '', '', '', '', '', '', '', exportForm.jabatan_pembuat || '', '', exportForm.jabatan_atasan || '']);
+    const summaryRow = worksheet.addRow(['', 'TOTAL ANGGARAN 1 TAHUN', '', '', '', '', '', '', totalAnggaran, '']);
+    worksheet.mergeCells(`B${summaryRow.number}:H${summaryRow.number}`);
+    summaryRow.getCell(2).font = { bold: true };
+    summaryRow.getCell(9).font = { bold: true };
+    summaryRow.getCell(9).numFmt = '#,##0';
+    summaryRow.eachCell(cell => {
+       // Semua sel row total diberi garis
+       cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
 
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    
-    // Merge title row
-    ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }
-    ];
-    ws['!cols'] = [
-      { wch: 4 }, { wch: 35 }, { wch: 8 }, { wch: 18 }, { wch: 25 },
-      { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 14 }
-    ];
+    worksheet.addRow([]); // Spacer
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Proker');
-    XLSX.writeFile(wb, `Proker_${unitName.replace(/\s/g,'_')}_${tahunFilter}.xlsx`);
+    // 5. Tanda Tangan
+    const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    
+    // Cari Ketua Unit Otomatis (Role ID 101)
+    const ketuaUnit = unit?.users?.find((u: any) => Number(u.role_id) === 101) || null;
+    
+    worksheet.addRow(['', '', '', '', '', '', '', '', `Yogyakarta, ${today}`]);
+    const ttdHeader = worksheet.addRow(['', 'Pemerhati', '', '', 'Ketua', '', '', '', 'Sekretaris']);
+    ttdHeader.font = { bold: true };
+    
+    worksheet.addRow([]); worksheet.addRow([]); worksheet.addRow([]); // Spacer ttd
+
+    const ttdNames = worksheet.addRow([
+      '', 
+      exportForm.pemerhati || '( ..................... )', 
+      '', '', 
+      exportForm.ketua || '( ..................... )', 
+      '', '', '', 
+      exportForm.sekretaris || '( ..................... )'
+    ]);
+    const ttdNbm = worksheet.addRow([
+      '', 
+      'NBM. ' + (exportForm.nbm_pemerhati || ''), 
+      '', '', 
+      'NBM. ' + (exportForm.nbm_ketua || ''), 
+      '', '', '', 
+      'NBM. ' + (exportForm.nbm_sekretaris || '')
+    ]);
+    [ttdNames, ttdNbm].forEach(row => {
+      row.font = { bold: true };
+      row.getCell(2).alignment = { horizontal: 'left' };
+      row.getCell(5).alignment = { horizontal: 'left' };
+      row.getCell(9).alignment = { horizontal: 'left' };
+    });
+
+    // Column Widths
+    worksheet.getColumn(1).width = 4;
+    worksheet.getColumn(2).width = 25;
+    worksheet.getColumn(3).width = 8;
+    worksheet.getColumn(4).width = 25;
+    worksheet.getColumn(5).width = 20;
+    worksheet.getColumn(6).width = 20;
+    worksheet.getColumn(7).width = 20;
+    worksheet.getColumn(8).width = 20;
+    worksheet.getColumn(9).width = 15;
+    worksheet.getColumn(10).width = 18;
+
+    // Export File
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = `Proker_${unitName.replace(/\s/g,'_')}_${tahunFilter}.xlsx`;
+    link.click();
     setShowExport(false);
   };
 
@@ -206,18 +323,21 @@ export default function ProkerPage() {
   };
 
   const getGlobalUnitStats = () => {
-    // Total anggaran agreed for all prokers in this year
     const totalAnggaran = prokerList.reduce((sum, pk) => sum + Number(pk.anggaran_setahun), 0);
-    
-    // Get unit info from prokerList[0] (admin view) or user.unit (unit view)
+    const isGlobal = user?.role?.nama === 'Super Admin' || user?.role?.nama === 'PDMK';
     const unit = prokerList.length > 0 ? prokerList[0].unit : user?.unit;
     const currentPaguRecord = unit?.paguRecords?.find((r: any) => r.tahun === Number(tahunFilter));
     const paguUnit = currentPaguRecord ? Number(currentPaguRecord.nominal) : 0;
-    
     const sisaPagu = paguUnit - totalAnggaran;
     const usagePct = paguUnit > 0 ? Math.min(100, Math.round((totalAnggaran / paguUnit) * 100)) : 0;
 
-    return { totalAnggaran, paguUnit, sisaPagu, usagePct, unitName: unit?.nama_unit };
+    return { 
+      totalAnggaran, 
+      paguUnit, 
+      sisaPagu, 
+      usagePct, 
+      unitName: isGlobal ? 'Seluruh Unit (Gabungan)' : (unit?.nama_unit || 'Unit') 
+    };
   };
 
   return (
@@ -364,7 +484,9 @@ export default function ProkerPage() {
               })()}
             </div>
             <div className="px-6 pb-4 flex justify-end gap-3">
-              <button onClick={() => { setDetailItem(null); openEdit(detailItem); }} className="bg-yellow-50 text-yellow-700 border border-yellow-200 px-4 py-2 rounded-lg font-bold text-sm">✏ Edit</button>
+              {isPeriodOpen() && (
+                <button onClick={() => { setDetailItem(null); openEdit(detailItem); }} className="bg-yellow-50 text-yellow-700 border border-yellow-200 px-4 py-2 rounded-lg font-bold text-sm">✏ Edit</button>
+              )}
               <button onClick={() => setDetailItem(null)} className="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg font-bold">Tutup</button>
             </div>
           </div>
@@ -379,33 +501,61 @@ export default function ProkerPage() {
               <h2 className="font-bold text-lg">📥 Download Format Excel</h2>
               <button onClick={() => setShowExport(false)} className="text-white/80 hover:text-white text-2xl">✕</button>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-600">Isikan nama penandatangan untuk dicantumkan di bagian bawah dokumen:</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Pembuat</label>
-                  <input type="text" value={exportForm.pembuat} onChange={e => setExportForm(f => ({ ...f, pembuat: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Nama lengkap" />
+            <div className="p-6 space-y-5">
+              <p className="text-xs text-gray-600 bg-emerald-50 p-3 rounded-lg border border-emerald-100 italic font-medium">
+                Sistem telah mengisi data tanda tangan otomatis. Bapak bisa mengubah nama atau NBM jika diperlukan:
+              </p>
+              
+              <div className="space-y-4">
+                {/* Pemerhati */}
+                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="col-span-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Kolom Kiri (Pemerhati)</div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-700 mb-1">Nama Pemerhati</label>
+                    <input type="text" value={exportForm.pemerhati} onChange={e => setExportForm(f => ({ ...f, pemerhati: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-700 mb-1">NBM Pemerhati</label>
+                    <input type="text" value={exportForm.nbm_pemerhati} onChange={e => setExportForm(f => ({ ...f, nbm_pemerhati: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold" />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Jabatan Pembuat</label>
-                  <input type="text" value={exportForm.jabatan_pembuat} onChange={e => setExportForm(f => ({ ...f, jabatan_pembuat: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Ketua Majelis" />
+
+                {/* Ketua */}
+                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="col-span-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Kolom Tengah (Ketua Unit)</div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-700 mb-1">Nama Ketua</label>
+                    <input type="text" value={exportForm.ketua} onChange={e => setExportForm(f => ({ ...f, ketua: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-700 mb-1">NBM Ketua</label>
+                    <input type="text" value={exportForm.nbm_ketua} onChange={e => setExportForm(f => ({ ...f, nbm_ketua: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold" />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Atasan / Mengetahui</label>
-                  <input type="text" value={exportForm.atasan} onChange={e => setExportForm(f => ({ ...f, atasan: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Nama lengkap" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Jabatan Atasan</label>
-                  <input type="text" value={exportForm.jabatan_atasan} onChange={e => setExportForm(f => ({ ...f, jabatan_atasan: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="Ketua PDM" />
+
+                {/* Sekretaris */}
+                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="col-span-2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Kolom Kanan (Sekretaris)</div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-700 mb-1">Nama Sekretaris</label>
+                    <input type="text" value={exportForm.sekretaris} onChange={e => setExportForm(f => ({ ...f, sekretaris: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-700 mb-1">NBM Sekretaris</label>
+                    <input type="text" value={exportForm.nbm_sekretaris} onChange={e => setExportForm(f => ({ ...f, nbm_sekretaris: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold" />
+                  </div>
                 </div>
               </div>
+
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowExport(false)} className="flex-1 px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50">Batal</button>
-                <button type="button" onClick={handleExportExcel} className="flex-1 bg-muh-green text-white font-bold py-2 rounded-lg hover:bg-muh-green-dark">📥 Download Excel</button>
+                <button type="button" onClick={() => setShowExport(false)} className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-gray-700 font-bold hover:bg-gray-50 transition-all">Batal</button>
+                <button type="button" onClick={handleExportExcel} className="flex-1 bg-muh-green text-white font-black py-3 rounded-xl hover:bg-muh-green-dark shadow-xl transition-all transform hover:scale-[1.02]">📥 DOWNLOAD SEKARANG</button>
               </div>
             </div>
           </div>

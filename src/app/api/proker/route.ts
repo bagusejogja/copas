@@ -24,7 +24,12 @@ export async function GET(req: NextRequest) {
       where: whereClause,
       include: {
         unit: {
-          include: { paguRecords: true }
+          include: { 
+            paguRecords: true,
+            users: {
+              include: { role: true }
+            }
+          }
         },
         dibuat_oleh: { include: { role: true } },
         proposals: {
