@@ -12,6 +12,7 @@ model Unit {
   nama_unit      String
   nama_unit_pendek String?
   pemerhati        String?
+  tipe             String       @default("UNIT") // GROUP or UNIT
   parent_unit_id Int?
   parent_unit    Unit?          @relation("UnitHierarchy", fields: [parent_unit_id], references: [id])
   child_units    Unit[]         @relation("UnitHierarchy")
@@ -22,6 +23,18 @@ model Unit {
   activityTypes  ActivityType[]
   accounts       Account[]
   paguRecords    UnitPagu[]
+  visibilities   MasterVisibility[]
+}
+
+model MasterVisibility {
+  id               Int      @id @default(autoincrement())
+  reference_type   String   // "expense", "activity", "account"
+  reference_id     Int
+  unit_id          Int
+  unit             Unit     @relation(fields: [unit_id], references: [id], onDelete: Cascade)
+  is_active        Boolean  @default(true)
+
+  @@unique([reference_type, reference_id, unit_id])
 }
 
 model Role {

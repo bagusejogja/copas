@@ -2,6 +2,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import MiniEditor from '@/components/MiniEditor';
 
 function FormProposal() {
   const router = useRouter();
@@ -301,11 +302,11 @@ function FormProposal() {
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-bold text-gray-700 mb-2">Susunan Panitia</label>
-                <textarea value={panitia} onChange={e => setPanitia(e.target.value)} className="w-full border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-muh-green font-medium" rows={2} placeholder="Sebutkan struktur kepanitiaan ringkas..."></textarea>
+                <MiniEditor value={panitia} onChange={setPanitia} placeholder="Ketik susunan kepanitiaan, gunakan toolbar untuk daftar bernomor..." />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-bold text-gray-700 mb-2">Kebutuhan Peralatan / Sarana</label>
-                <textarea value={peralatan} onChange={e => setPeralatan(e.target.value)} className="w-full border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-muh-green font-medium" rows={2} placeholder="Sebutkan alat/ruangan yang dibutuhkan..."></textarea>
+                <MiniEditor value={peralatan} onChange={setPeralatan} placeholder="Ketik kebutuhan alat/sarana kegiatan..." />
               </div>
            </div>
         </div>

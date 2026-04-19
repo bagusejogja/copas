@@ -58,10 +58,12 @@ export default function DashboardLayout({
         {/* Logo */}
         <div className="p-5 flex items-center justify-between border-b border-white/10 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 flex-shrink-0 bg-white rounded-full flex items-center justify-center font-bold text-muh-green-dark text-xl">M</div>
+            <div className="h-10 w-10 flex-shrink-0 bg-white rounded-lg flex items-center justify-center p-1.5 shadow-sm">
+              <img src="/logo-muh.png" alt="Logo" className="h-full w-full object-contain" />
+            </div>
             <div>
-              <h2 className="font-bold text-base tracking-wide leading-tight">SI Anggaran</h2>
-              <p className="text-[10px] text-muh-green-light font-bold uppercase tracking-widest">Muhammadiyah</p>
+              <h2 className="font-bold text-base tracking-wide leading-tight">SIMMUDA</h2>
+              <p className="text-[10px] text-muh-green-light font-bold uppercase tracking-widest text-[#98FF98]">Kota Jogja</p>
             </div>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-white/60 hover:text-white">✕</button>
@@ -94,14 +96,23 @@ export default function DashboardLayout({
           ))}
 
           {/* Admin Section */}
-          {(hasPermission('/dashboard/units') || hasPermission('/dashboard/users')) && (
+          {(hasPermission('/dashboard/master') || 
+            hasPermission('/dashboard/pagu') || 
+            hasPermission('/dashboard/approval-flow') || 
+            hasPermission('/dashboard/units') || 
+            hasPermission('/dashboard/users') || 
+            hasPermission('/dashboard/menus') || 
+            hasPermission('/dashboard/settings')) && (
             <div className="pt-4 mt-4 border-t border-white/10">
               <p className="px-3 text-[10px] font-black text-white/30 uppercase tracking-[0.2em] mb-2">Settings</p>
               {[
                 { path: '/dashboard/master', label: 'Data Master', icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4' },
                 { path: '/dashboard/pagu', label: 'Pagu Anggaran', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+                { path: '/dashboard/approval-flow', label: 'Alur Persetujuan', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
                 { path: '/dashboard/units', label: 'Manajemen Unit', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
                 { path: '/dashboard/users', label: 'Manajemen User', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+                { path: '/dashboard/menus', label: 'Hak Akses', icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
+                { path: '/dashboard/settings', label: 'Pengaturan Sistem', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
               ].map((item) => hasPermission(item.path) && (
                 <a 
                   key={item.path} 
@@ -120,19 +131,11 @@ export default function DashboardLayout({
           )}
         </nav>
 
-        {/* User Info & Logout */}
+        {/* Logout Only */}
         <div className="p-4 border-t border-white/10 bg-black/10">
-          <div className="flex items-center gap-3 mb-4">
-             <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center font-bold text-emerald-400">
-               {user?.nama?.charAt(0).toUpperCase()}
-             </div>
-             <div className="min-w-0">
-               <p className="text-sm font-bold truncate">{user?.nama}</p>
-               <p className="text-[10px] text-white/40 truncate font-black tracking-wider uppercase">{user?.unit?.nama_unit_pendek || user?.unit?.nama_unit}</p>
-             </div>
-          </div>
-          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500/10 text-red-400 text-xs font-bold hover:bg-red-500 hover:text-white transition-all">
-            Keluar Sistem
+          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-red-500 text-sm font-bold hover:bg-red-500 hover:text-white transition-all group" title="Keluar Sistem">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            <span className="md:inline">Keluar Sistem</span>
           </button>
         </div>
       </aside>
@@ -146,19 +149,27 @@ export default function DashboardLayout({
                <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                </button>
-               <h1 className="text-sm lg:text-base font-black text-gray-800 tracking-tight uppercase">
-                 <span className="hidden sm:inline">SI Anggaran</span> Muhammadiyah
+               <h1 className="text-[10px] sm:text-xs font-black text-gray-800 tracking-tight uppercase leading-tight">
+                 <span className="text-muh-green">SIMMUDA Kota Jogja</span> <br/>
+                 <span className="text-[8px] sm:text-[9px] text-gray-500 font-bold block truncate">Sistem Informasi Manajemen Muhammadiyah Daerah Kota Jogja</span>
                </h1>
              </div>
              
-             <div className="flex items-center gap-3">
-               <div className="hidden md:block text-right">
+             <div className="flex items-center gap-3 sm:gap-4">
+               <div className="hidden md:flex flex-col items-end">
                  <p className="text-xs font-black text-gray-900 leading-tight uppercase tracking-wider">{user?.nama}</p>
-                 <p className="text-[10px] text-muh-green font-bold italic">{user?.role?.nama}</p>
+                 <div className="flex items-center gap-1.5 mt-1">
+                   <p className="text-[9px] text-gray-500 font-black px-1.5 py-0.5 bg-gray-100 rounded uppercase">{user?.unit?.nama_unit_pendek || user?.unit?.nama_unit}</p>
+                   <p className="text-[9px] text-muh-green font-bold italic">{user?.role?.nama}</p>
+                 </div>
                </div>
-               <div className="h-9 w-9 bg-gray-100 text-muh-green-dark border-2 border-white shadow-sm rounded-full flex items-center justify-center font-black text-xs">
-                 {user?.nama?.charAt(0).toUpperCase()}
-               </div>
+               
+               <a href="/dashboard/profile" className="flex items-center gap-1.5 p-1 sm:pr-3 bg-gray-50 hover:bg-emerald-50 border border-gray-200 hover:border-muh-green/50 rounded-full transition-all group cursor-pointer" title="Ubah Profil">
+                 <div className="h-8 w-8 sm:h-9 sm:w-9 bg-white text-muh-green-dark shadow-sm rounded-full flex items-center justify-center font-black text-xs border border-gray-100 group-hover:border-muh-green transition-all">
+                   {user?.nama?.charAt(0).toUpperCase() || 'U'}
+                 </div>
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 group-hover:text-muh-green transition-colors hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+               </a>
              </div>
           </div>
         </header>

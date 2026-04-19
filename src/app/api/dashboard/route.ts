@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
+import { getVisibleUnitIds } from '@/lib/unit-hierarchy';
 
 export async function GET(req: Request) {
-  console.log("Dashboard API called"); // Logging for debugging
   try {
     const { searchParams } = new URL(req.url);
     const unitIdParam = searchParams.get('unit_id');
@@ -24,19 +24,21 @@ export async function GET(req: Request) {
     // Role check
     const isPusat = !payload || (payload.role && payload.role.level === 99) || (payload.unit && payload.unit.id === 1);
     
-    // If admin/pusat selects a specific unit filter from dropdown, apply it
-    const selectedUnitId = isPusat && unitIdParam ? Number(unitIdParam) : null;
+    // Determine target units (hierarchical)
+    let targetUnitIds: number[] = [];
+    if (unitIdParam) {
+      targetUnitIds = await getVisibleUnitIds(Number(unitIdParam));
+    } else if (!isPusat && payload?.unit?.id) {
+      targetUnitIds = await getVisibleUnitIds(payload.unit.id);
+    }
 
     // Filters
-    const prokerWhere = selectedUnitId 
-      ? { unit_id: selectedUnitId } 
-      : isPusat ? {} : { unit_id: payload?.unit?.id };
-    const proposalWhere = selectedUnitId
-      ? { unit_id: selectedUnitId, NOT: { status_terakhir: 'DRAFT' } }
-      : isPusat ? { NOT: { status_terakhir: 'DRAFT' } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: 'DRAFT' } };
-    const unitFilter = selectedUnitId 
-      ? { id: selectedUnitId } 
-      : isPusat ? {} : { id: payload?.unit?.id };
+    const prokerWhere: any = targetUnitIds.length > 0 ? { unit_id: { in: targetUnitIds } } : {};
+    const proposalWhere: any = { 
+      NOT: { status_terakhir: 'DRAFT' },
+      ...(targetUnitIds.length > 0 ? { unit_id: { in: targetUnitIds } } : {})
+    };
+    const unitFilter: any = targetUnitIds.length > 0 ? { id: { in: targetUnitIds } } : {};
 
     // 3. Ambil Nama semua dynamic steps untuk filter PENDING
     const flows = await prisma.approvalFlow.findMany({ where: { is_active: true } });
@@ -55,25 +57,19 @@ export async function GET(req: Request) {
         where: unitFilter,
         include: {
           proposals: {
-            where: isPusat ? { NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } } : { unit_id: payload?.unit?.id, NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } },
-            select: {
-              status_terakhir: true,
-              details: { select: { nominal: true } },
-              pertanggungjawabans: { 
-                where: { status: 'APPROVED_FINAL' },
-                select: { total_realisasi: true } 
-              }
-            }
+            where: { NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } },
+            include: { details: true, pertanggungjawabans: true }
           }
         },
         orderBy: { id: 'asc' },
-        take: 50 // Increased for consolidation
+        take: 50
       }).catch(() => []),
       prisma.proposal.findMany({
         where: proposalWhere,
-        select: {
-          status_terakhir: true,
-          details: { select: { nominal: true } }
+        include: {
+          details: true,
+          pertanggungjawabans: true,
+          activity_type: true
         }
       }).catch(() => []),
       prisma.programKerja.aggregate({
@@ -90,42 +86,104 @@ export async function GET(req: Request) {
     let totalNominalFinal = 0;
     let totalNominalPaid = 0;
 
+    const monthlyChart = Array.from({ length: 12 }, () => ({
+      pengajuan: 0,
+      disetujui: 0,
+      spj: 0
+    }));
+
     allProposals.forEach((p: any) => {
       const nominal = (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0);
       totalNominalDiajukan += nominal;
       if (pendingStatuses.includes(p.status_terakhir)) totalNominalPending += nominal;
       if (finalStatuses.includes(p.status_terakhir)) totalNominalFinal += nominal;
       if (p.status_terakhir === 'PAID') totalNominalPaid += nominal;
+
+      // Grouping per Month
+      if (p.tanggal) {
+        const month = new Date(p.tanggal).getMonth(); 
+        monthlyChart[month].pengajuan += nominal;
+        if (finalStatuses.includes(p.status_terakhir)) {
+           monthlyChart[month].disetujui += nominal;
+        }
+        const totalSpj = (p.pertanggungjawabans || []).reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0);
+        monthlyChart[month].spj += totalSpj;
+      }
     });
 
     console.log("Processing unit summary...");
-    const unitSummary = (units || []).map((u: any) => {
-      const diajukan = (u.proposals || []).length;
+    const unitSummary = await Promise.all((units || []).map(async (u: any) => {
+      const descendantIds = await getVisibleUnitIds(u.id);
+      const subProposals = allProposals.filter((p: any) => descendantIds.includes(p.unit_id));
       
-      const totalAnggaran = (u.proposals || []).reduce((sum: number, p: any) =>
+      const diajukan = subProposals.length;
+      const totalAnggaran = subProposals.reduce((sum: number, p: any) =>
         sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
       );
-      
-      const totalDisetujui = (u.proposals || [])
+      const totalDisetujui = subProposals
         .filter((p: any) => finalStatuses.includes(p.status_terakhir))
         .reduce((sum: number, p: any) =>
           sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
         );
+      // Indikator split SPJ logic
 
-      const totalSPJ = (u.proposals || [])
+      const totalSPJVerified = subProposals
         .reduce((sum: number, p: any) => 
-          sum + (p.pertanggungjawabans?.filter((lpj: any) => lpj.status === 'APPROVED_FINAL').reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
+          sum + (p.pertanggungjawabans?.filter((lpj: any) => 
+            lpj.status?.startsWith('APPROVE') || 
+            lpj.status === 'PAID' || 
+            lpj.status === 'SELESAI' // Jaga-jaga kalau ada status 'SELESAI'
+          ).reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
+        );
+      const totalSPJProcess = subProposals
+        .reduce((sum: number, p: any) => 
+          sum + (p.pertanggungjawabans?.filter((lpj: any) => 
+            lpj.status === 'SUBMITTED' || 
+            lpj.status === 'REVIEW' // Jaga-jaga kalau ada status 'REVIEW'
+          ).reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
         );
 
-      return { 
-        id: u.id, 
-        nama_unit: u.nama_unit || u.nama, 
-        diajukan, 
-        totalAnggaran, 
-        totalDisetujui, 
-        totalSPJ 
+      const currentYear = new Date().getFullYear();
+      
+      // 1. Pagu Jatah (Allocated)
+      const allPagus = await prisma.unitPagu.aggregate({
+        where: { unit_id: { in: descendantIds }, tahun: currentYear },
+        _sum: { nominal: true }
+      });
+      const consolidatedPagu = Number(allPagus._sum?.nominal || 0);
+
+      // 2. Pagu Proker (Sum of ProgramKerja anggaran)
+      const prokerPaguDist = await prisma.programKerja.aggregate({
+        where: { unit_id: { in: descendantIds } },
+        _sum: { anggaran_setahun: true }
+      });
+      const totalPaguProker = Number(prokerPaguDist._sum?.anggaran_setahun || 0);
+
+      return {
+        id: u.id,
+        nama_unit: u.nama_unit,
+        tipe: u.tipe,
+        parent_unit_id: u.parent_unit_id,
+        diajukan,
+        totalAnggaran,
+        totalDisetujui,
+        totalSPJ: totalSPJVerified, // Tetap gunakan nama ini untuk kompatibilitas, tapi isinya verified
+        totalSPJProcess,
+        consolidatedPagu,
+        totalPaguProker
       };
-    }).filter((u: any) => u.diajukan > 0);
+    }));
+
+    const unitSummaryFiltered = unitSummary.filter((u: any) => {
+      return u.id === 1 || u.diajukan > 0 || u.consolidatedPagu > 0 || u.totalPaguProker > 0;
+    });
+
+    // stats level unit pagu
+    const curYear = new Date().getFullYear();
+    const globalUnitPagu = await prisma.unitPagu.aggregate({
+      where: prokerWhere.unit_id ? { unit_id: prokerWhere.unit_id } : {},
+      _sum: { nominal: true }
+    });
 
     console.log("Fetching proker data...");
     const prokerData = await prisma.programKerja.findMany({
@@ -161,10 +219,8 @@ export async function GET(req: Request) {
           sum + (p.details || []).reduce((s: number, d: any) => s + Number(d.nominal || 0), 0), 0
         );
       const dilaporkanRow = (pk.proposals || []).reduce((sum: number, p: any) => 
-        sum + (p.pertanggungjawabans?.filter((lpj: any) => lpj.status === 'APPROVED_FINAL').reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
+        sum + (p.pertanggungjawabans?.filter((lpj: any) => lpj.status?.startsWith('APPROVE') || lpj.status === 'PAID' || lpj.status === 'SELESAI').reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
       );
-      
-      const sisa = anggaran - disetujuiRow;
       
       return {
         id: pk.id,
@@ -187,6 +243,21 @@ export async function GET(req: Request) {
       include: { activity_type: true, unit: true }
     }).catch(() => []);
 
+    // Calculate true global SPJ stats
+    const totalNominalSPJVerified = allProposals.reduce((sum: number, p: any) => 
+      sum + (p.pertanggungjawabans?.filter((lpj: any) => 
+        lpj.status?.startsWith('APPROVE') || 
+        lpj.status === 'PAID' || 
+        lpj.status === 'SELESAI'
+      ).reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
+    );
+    const totalNominalSPJProcess = allProposals.reduce((sum: number, p: any) => 
+      sum + (p.pertanggungjawabans?.filter((lpj: any) => 
+        lpj.status === 'SUBMITTED' || 
+        lpj.status === 'REVIEW'
+      ).reduce((s: number, lpj: any) => s + Number(lpj.total_realisasi || 0), 0) || 0), 0
+    );
+
     console.log("Dashboard API Success");
     return NextResponse.json({
       stats: { 
@@ -199,11 +270,15 @@ export async function GET(req: Request) {
         totalNominalPending,
         totalNominalFinal,
         totalNominalPaid,
-        totalAnggaranSetahun
+        totalNominalSPJ: totalNominalSPJVerified,
+        totalNominalSPJProcess: totalNominalSPJProcess,
+        totalAnggaranSetahun, // Ini Pagu Proker Total
+        totalUnitPagu: Number(globalUnitPagu._sum?.nominal || 0) // Ini Total Jatah 1M x Unit
       },
-      unitSummary,
+      unitSummary: unitSummaryFiltered,
       prokerSummary,
-      recentProposals
+      recentProposals,
+      monthlyChart
     });
   } catch (error: any) {
     console.error("CRITICAL DASHBOARD ERROR:", error);

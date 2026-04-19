@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { getVisibleUnitIds } from '@/lib/unit-hierarchy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,10 +27,12 @@ export async function GET(req: NextRequest) {
 
     let whereClause: any = {};
 
-    if (!isPusat) {
-      whereClause.unit_id = payload.unit.id;
-    } else if (filterUnit) {
+    if (filterUnit) {
       whereClause.unit_id = Number(filterUnit);
+    } else if (!isPusat) {
+      // Get self + all descendants
+      const visibleIds = await getVisibleUnitIds(payload.unit.id);
+      whereClause.unit_id = { in: visibleIds };
     }
 
     const possibleStatuses = [];
@@ -68,6 +71,8 @@ export async function GET(req: NextRequest) {
         pemohon: true,
         activity_type: true,
         details: true,
+        dibayar_oleh: true,
+        proker: { select: { id: true, nama_kegiatan: true, sasaran: true, tujuan: true, strategi: true, indikator: true } },
         approvals: {
           include: { approver: { include: { role: true } } },
           orderBy: { tanggal: 'asc' }
@@ -93,6 +98,15 @@ export async function POST(req: NextRequest) {
 
     const proposal = await prisma.proposal.findUnique({ where: { id: Number(proposal_id) }});
     if (!proposal) return NextResponse.json({ message: 'Proposal tidak ditemukan' }, { status: 404 });
+
+    // Hierarchy Check: Approver must be in the same unit or an ancestor unit
+    const isPusat = payload.unit.id === 1 || payload.role.level === 99;
+    if (!isPusat) {
+      const visibleIds = await getVisibleUnitIds(payload.unit.id);
+      if (!visibleIds.includes(proposal.unit_id)) {
+        return NextResponse.json({ message: 'Anda tidak memiliki otoritas atas unit ini.' }, { status: 403 });
+      }
+    }
 
     // 1. Ambil Alur Approval Aktif
     const flows = await prisma.approvalFlow.findMany({

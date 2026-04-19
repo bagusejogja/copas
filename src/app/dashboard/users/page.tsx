@@ -143,7 +143,10 @@ export default function UsersPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password Baru <span className="text-gray-400">(kosongkan jika tidak diubah)</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
+                  <span>Password Baru <span className="text-gray-400 font-normal">(kosongkan jika tidak diubah)</span></span>
+                  <button type="button" onClick={() => setEditForm(f => ({ ...f, password: '123' }))} className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold hover:bg-red-200">Set "123"</button>
+                </label>
                 <input type="password" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg p-2.5 text-sm" placeholder="●●●●" />
               </div>

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 type Role = { id: number; nama_jabatan: string; level: number };
 type Menu = { id: number; nama_menu: string; path: string };
@@ -17,6 +18,8 @@ export default function PermissionManager({ initialRoles, initialMenus }: { init
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
 
   // Fetch permissions for selected role
   useEffect(() => {
@@ -92,15 +95,24 @@ export default function PermissionManager({ initialRoles, initialMenus }: { init
       {/* Role Selector */}
       <div className="mb-8 max-w-sm">
         <label className="block text-sm font-semibold text-gray-700 mb-2">Pilih Jabatan (Role)</label>
-        <select 
-          className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-muh-green focus:border-muh-green block p-2.5 outline-none transition-colors"
-          value={selectedRole || ''}
-          onChange={(e) => setSelectedRole(Number(e.target.value))}
-        >
-          {initialRoles.map(role => (
-            <option key={role.id} value={role.id}>{role.nama_jabatan}</option>
-          ))}
-        </select>
+        {isMounted && (
+          <Select
+            instanceId="role-permission-select"
+            placeholder="Cari Jabatan/Role..."
+            options={initialRoles.map(r => ({ value: r.id, label: `${r.nama_jabatan} (Level ${r.level})` }))}
+            value={selectedRole ? { value: selectedRole, label: initialRoles.find(r => r.id === selectedRole)?.nama_jabatan + ` (Level ${initialRoles.find(r => r.id === selectedRole)?.level})` } : null}
+            onChange={(val: any) => setSelectedRole(val ? val.value : null)}
+            className="text-sm"
+            styles={{
+              control: (base) => ({
+                ...base,
+                borderRadius: '0.5rem',
+                borderColor: '#d1d5db',
+                backgroundColor: '#f9fafb'
+              })
+            }}
+          />
+        )}
       </div>
 
       {loading ? (

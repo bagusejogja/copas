@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { getVisibleUnitIds } from '@/lib/unit-hierarchy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const filterUnit = searchParams.get('unit_id');
 
-    // Filter by unit if not admin/high-level/bendahara
+    // Filter by unit - hierarchical visibility
     const isAdmin = payload.role.level === 99 || payload.role.id === 5;
     
     let whereClause: any = {};
@@ -24,13 +25,26 @@ export async function GET(req: NextRequest) {
         whereClause.unit_id = payload.unit?.id;
       }
     } else {
-      // Default: Only show current user's unit unless Admin/PDM explicitly asks for others
-      whereClause.unit_id = payload.unit?.id;
+      // Default: show current user's unit + all descendants
+      const visibleIds = await getVisibleUnitIds(payload.unit?.id);
+      whereClause.unit_id = { in: visibleIds };
+    }
+    // Date range filter
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+    if (from || to) {
+      whereClause.tanggal = {};
+      if (from) whereClause.tanggal.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        whereClause.tanggal.lte = toDate;
+      }
     }
 
     const records = await prisma.kas.findMany({
       where: whereClause,
-      orderBy: { tanggal: 'desc' },
+      orderBy: { tanggal: 'asc' },
       include: { proposal: { select: { judul: true } } }
     });
 

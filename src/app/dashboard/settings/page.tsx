@@ -47,6 +47,31 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
+        {/* Active Year Card */}
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+          <div className="p-6 bg-emerald-600 text-white flex items-center gap-4">
+            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl">🎯</div>
+            <div>
+               <h3 className="font-bold">Tahun Anggaran Aktif</h3>
+               <p className="text-xs text-white/80">Menentukan default filter tahun anggaran yang terbuka otomatis di seluruh sistem.</p>
+            </div>
+          </div>
+          <div className="p-8">
+            <div className="max-w-xs">
+              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Tahun Default</label>
+              <select 
+                value={settings.tahun_anggaran_aktif || String(new Date().getFullYear())}
+                onChange={e => saveSetting('tahun_anggaran_aktif', e.target.value)}
+                className="w-full bg-gray-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white rounded-2xl p-4 font-bold text-gray-800 transition-all cursor-pointer"
+              >
+                {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
         {/* Period Setting Card */}
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="p-6 bg-gray-900 text-white flex items-center gap-4">
@@ -60,8 +85,8 @@ export default function SettingsPage() {
             <div className="flex gap-3 mb-4">
                <button 
                  onClick={() => {
-                   const start = new Date().toISOString().split('T')[0];
-                   const end = new Date(new Date().getFullYear(), 11, 31).toISOString().split('T')[0];
+                   const start = new Date().toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
+                   const end = new Date(new Date().getFullYear(), 11, 31, 23, 59).toISOString().slice(0, 16);
                    saveSetting('proker_start_date', start);
                    saveSetting('proker_end_date', end);
                  }}
@@ -83,7 +108,7 @@ export default function SettingsPage() {
                <div>
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Tanggal Mulai Buka (Global)</label>
                   <input 
-                    type="date" 
+                    type="datetime-local" 
                     value={settings.proker_start_date || ''} 
                     onChange={e => saveSetting('proker_start_date', e.target.value)}
                     className="w-full bg-gray-50 border-2 border-transparent focus:border-muh-green focus:bg-white rounded-2xl p-4 font-bold transition-all"
@@ -92,7 +117,7 @@ export default function SettingsPage() {
                <div>
                   <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Tanggal Tutup Akses (Global)</label>
                   <input 
-                    type="date" 
+                    type="datetime-local" 
                     value={settings.proker_end_date || ''} 
                     onChange={e => saveSetting('proker_end_date', e.target.value)}
                     className="w-full bg-gray-50 border-2 border-transparent focus:border-red-500 focus:bg-white rounded-2xl p-4 font-bold transition-all"
@@ -126,7 +151,7 @@ export default function SettingsPage() {
                           <td className="px-4 py-3 font-bold text-gray-700">{u.nama_unit}</td>
                           <td className="px-4 py-3">
                              <input 
-                               type="date" 
+                               type="datetime-local" 
                                value={settings[`proker_start_date_${u.id}`] || ''} 
                                onChange={e => saveSetting(`proker_start_date_${u.id}`, e.target.value)}
                                className="text-xs p-2 border-gray-100 rounded bg-gray-50 focus:bg-white"
@@ -134,7 +159,7 @@ export default function SettingsPage() {
                           </td>
                           <td className="px-4 py-3">
                              <input 
-                               type="date" 
+                               type="datetime-local" 
                                value={settings[`proker_end_date_${u.id}`] || ''} 
                                onChange={e => saveSetting(`proker_end_date_${u.id}`, e.target.value)}
                                className="text-xs p-2 border-gray-100 rounded bg-gray-50 focus:bg-white"

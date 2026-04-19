@@ -44,14 +44,14 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8 bg-white/90 backdrop-blur-md p-10 rounded-3xl shadow-2xl relative z-10 border border-gray-100">
         <div>
           {/* Temporary Logo Placeholder */}
-          <div className="mx-auto h-24 w-24 rounded-full bg-muh-green flex items-center justify-center shadow-lg border-4 border-white">
-            <span className="text-white font-bold text-3xl">M</span>
+          <div className="mx-auto h-24 w-24 rounded-full bg-white flex items-center justify-center shadow-lg border-4 border-muh-green overflow-hidden p-2">
+            <img src="/logo-muh.png" alt="Logo" className="h-full w-full object-contain" />
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 drop-shadow-sm">
-            Login Sistem
+          <h2 className="mt-6 text-center text-2xl font-extrabold text-gray-900 drop-shadow-sm uppercase tracking-tight">
+            SIMMUDA Kota Jogja
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 font-medium">
-            Pengajuan Anggaran Program Kerja
+          <p className="mt-1 text-center text-[10px] text-gray-600 font-bold uppercase tracking-widest leading-relaxed px-4">
+            Sistem Informasi Manajemen <br/> Muhammadiyah Daerah Kota Jogja
           </p>
         </div>
 

@@ -26,6 +26,7 @@ export default function LaporanPage() {
 
   // View Modal
   const [viewLpj, setViewLpj] = useState<any | null>(null);
+  const [viewRekapProposal, setViewRekapProposal] = useState<any | null>(null);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -231,10 +232,11 @@ export default function LaporanPage() {
                        </div>
                        <h2 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition">{p.judul}</h2>
                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center">
-                          <div className="text-xs">
-                             <p className="text-gray-400 font-bold uppercase text-[9px]">🏢 Unit / Majelis</p>
-                             <p className="font-semibold text-gray-700">{p.unit?.nama_unit}</p>
-                          </div>
+                           <div className="text-xs col-span-2 sm:col-span-1">
+                              <p className="text-gray-400 font-bold uppercase text-[9px]">🏢 Unit / Proker</p>
+                              <p className="font-semibold text-gray-700">{p.unit?.nama_unit}</p>
+                              <p className="font-medium text-gray-500 text-[10px] truncate">{p.proker?.nama_kegiatan || 'Non-Proker'}</p>
+                           </div>
                           <div className="text-xs">
                              <p className="text-gray-400 font-bold uppercase text-[9px]">💰 Anggaran Cair</p>
                              <p className="font-semibold text-gray-700">Rp {totalRAB.toLocaleString('id-ID')}</p>
@@ -251,17 +253,43 @@ export default function LaporanPage() {
 
                        {/* List SPJ existing */}
                        {lpjs.length > 0 && (
-                         <div className="mt-4 flex flex-wrap gap-2">
-                            {lpjs.map((lpj: any) => (
-                              <div key={lpj.id} className="flex items-center gap-2 bg-gray-50 border p-2 rounded-xl">
-                                 <span className={`w-2 h-2 rounded-full ${lpj.status === 'DRAFT' ? 'bg-orange-400' : lpj.status === 'REJECTED' ? 'bg-red-400' : 'bg-emerald-400'}`}></span>
-                                 <span className="text-[10px] font-bold text-gray-600">RP {Number(lpj.total_realisasi).toLocaleString('id-ID')}</span>
-                                 <button onClick={() => setViewLpj({...p, current_pj: lpj})} className="text-[10px] text-blue-600 hover:underline">Detail</button>
-                                 {(lpj.status === 'DRAFT' || lpj.status === 'REJECTED') && canCreate && (
-                                   <button onClick={() => onSelectProposal(p, lpj)} className="text-[10px] text-orange-600 font-black hover:underline uppercase">✎ {lpj.status === 'REJECTED' ? 'Perbaiki' : 'Edit'}</button>
-                                 )}
-                              </div>
-                            ))}
+                         <div className="mt-4 border-t border-gray-100 pt-3">
+                             <div className="flex justify-between items-center mb-2">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Daftar Nota SPJ ({lpjs.length}):</p>
+                                <button onClick={() => setViewRekapProposal(p)} className="text-[10px] font-black bg-purple-50 text-purple-700 px-3 py-1 rounded-lg border border-purple-100 hover:bg-purple-600 hover:text-white transition-all uppercase tracking-widest">
+                                   📑 Lihat Rekap SPJ Usulan
+                                </button>
+                             </div>
+                             <div className="flex flex-wrap gap-2">
+                                {lpjs.map((lpj: any) => {
+                                  const sMap: any = {
+                                    'DRAFT': { label: 'DRAF', color: 'bg-orange-50 text-orange-600 border-orange-100' },
+                                    'SUBMITTED': { label: 'REVIEW', color: 'bg-blue-50 text-blue-600 border-blue-100 animate-pulse' },
+                                    'REJECTED': { label: 'PERBAIKI', color: 'bg-red-50 text-red-600 border-red-200' },
+                                    'APPROVED_FINAL': { label: 'SELESAI', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' }
+                                  };
+                                  const style = sMap[lpj.status] || { label: lpj.status, color: 'bg-gray-50 text-gray-500' };
+
+                                  return (
+                                    <div key={lpj.id} className={`flex items-center gap-2 border px-2.5 py-1.5 rounded-xl transition-all hover:shadow-md ${style.color}`}>
+                                       <div className="flex flex-col">
+                                          <div className="flex items-center gap-1.5">
+                                             <span className="text-[10px] font-black tracking-tighter">RP {Number(lpj.total_realisasi).toLocaleString('id-ID')}</span>
+                                             <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-white/50 border border-current opacity-70">{style.label}</span>
+                                          </div>
+                                          <div className="flex gap-2 mt-1">
+                                             <button onClick={() => setViewLpj({...p, current_pj: lpj})} className="text-[9px] font-bold hover:underline">Lihat Detail</button>
+                                             {(lpj.status === 'DRAFT' || lpj.status === 'REJECTED') && canCreate && (
+                                               <button onClick={() => onSelectProposal(p, lpj)} className="text-[9px] font-black uppercase flex items-center gap-1 hover:scale-105 transition-transform">
+                                                  {lpj.status === 'REJECTED' ? '📝 Koreksi & Kirim' : '✎ Edit Draf'}
+                                               </button>
+                                             )}
+                                          </div>
+                                       </div>
+                                    </div>
+                                  );
+                                })}
+                             </div>
                          </div>
                        )}
                     </div>
@@ -438,6 +466,32 @@ export default function LaporanPage() {
                      </div>
                   </div>
 
+                  {/* ALUR PERSETUJUAN SPJ */}
+                  <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100 flex flex-col md:flex-row gap-6 items-center justify-between">
+                     <div className="flex-1">
+                        <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest mb-2">Riwayat Pemeriksaan SPJ</p>
+                        <div className="flex gap-2">
+                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight ${viewLpj.current_pj?.status === 'DRAFT' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                              Step 1: Terbit ({viewLpj.current_pj?.nama_pembuat || 'PIC'})
+                           </span>
+                           {viewLpj.current_pj?.status === 'SUBMITTED' && (
+                              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight bg-blue-100 text-blue-700 animate-pulse">
+                                 Step 2: Review Bendahara ({viewLpj.current_pj?.nama_bendahara || '-'})
+                              </span>
+                           )}
+                           {viewLpj.current_pj?.status === 'APPROVED_FINAL' && (
+                              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight bg-emerald-600 text-white shadow-sm">
+                                 Step 3: Final Pimpinan ({viewLpj.current_pj?.nama_pimpinan || '-'})
+                              </span>
+                           )}
+                        </div>
+                     </div>
+                     <div className="text-right">
+                        <p className="text-[10px] text-gray-400 font-bold uppercase">Status Akhir</p>
+                        <p className="text-sm font-black text-gray-800 tracking-tighter">{viewLpj.current_pj?.status === 'SUBMITTED' ? 'MENUNGGU VERIFIKASI' : viewLpj.current_pj?.status}</p>
+                     </div>
+                  </div>
+
                   <div>
                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">📜 Rincian Pengeluaran Nota</p>
                      <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
@@ -473,34 +527,140 @@ export default function LaporanPage() {
                      <p className="text-sm text-gray-700 bg-gray-50 p-6 rounded-3xl leading-relaxed whitespace-pre-line border border-gray-100 italic">"{viewLpj.current_pj?.ringkasan || '-'}"</p>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-8 pt-8 border-t border-gray-100 text-center">
-                     <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-8">Pihak Pertama (PIC)</p>
-                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.current_pj?.nama_pembuat || '-'}</p>
-                     </div>
-                     <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-8">Bendahara Unit</p>
-                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.current_pj?.nama_bendahara || '-'}</p>
-                     </div>
-                     <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mb-8">Pimpinan Unit</p>
-                        <p className="text-sm font-black border-b border-gray-900 pb-1">{viewLpj.current_pj?.nama_pimpinan || '-'}</p>
-                     </div>
+                  <div className="bg-gray-50 p-4 mt-6 rounded-2xl flex flex-wrap gap-4 sm:gap-8 justify-between border border-gray-100 text-xs">
+                     <p><span className="text-gray-400 uppercase tracking-widest text-[9px] font-bold block mb-1">Dibuat Oleh</span> <span className="font-black text-gray-800">{viewLpj.current_pj?.nama_pembuat || '-'}</span></p>
+                     <p><span className="text-gray-400 uppercase tracking-widest text-[9px] font-bold block mb-1">Bendahara</span> <span className="font-black text-gray-800">{viewLpj.current_pj?.nama_bendahara || '-'}</span></p>
+                     <p><span className="text-gray-400 uppercase tracking-widest text-[9px] font-bold block mb-1">Pimpinan</span> <span className="font-black text-gray-800">{viewLpj.current_pj?.nama_pimpinan || '-'}</span></p>
                   </div>
                </div>
 
                 <div className="p-8 bg-gray-50 border-t rounded-b-3xl flex justify-between gap-4">
                    <button 
                      onClick={() => window.print()} 
-                     className="bg-white text-gray-800 border-2 border-gray-200 px-6 py-2 rounded-xl font-black text-sm flex items-center gap-2 hover:bg-gray-50 transition-all"
+                     className="bg-white text-gray-800 border-2 border-gray-200 px-6 py-2 rounded-xl font-black text-sm flex items-center gap-2 hover:bg-gray-50 transition-all print:hidden"
                    >
-                     📄 Cetak Laporan / PDF
+                     📄 Cetak Lembar Nota / PDF
                    </button>
-                   <button onClick={() => setViewLpj(null)} className="bg-gray-900 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl hover:bg-black transition-all">Tutup Pratinjau</button>
+                   <button onClick={() => setViewLpj(null)} className="bg-gray-900 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-xl hover:bg-black transition-all print:hidden">Tutup Pratinjau</button>
                 </div>
             </div>
          </div>
       )}
+
+      {/* REKAP PROPOSAL MODAL */}
+       {viewRekapProposal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto print:bg-white print:p-0">
+             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl my-8 stagger-fade-in content-to-print print:shadow-none print:my-0">
+                <div className="p-8 border-b flex justify-between items-start bg-blue-50/50 rounded-t-3xl print:bg-white">
+                   <div>
+                      <p className="text-[10px] text-blue-500 font-black uppercase tracking-[0.2em] mb-1">Rekapitulasi Laporan Pertanggungjawaban (SPJ)</p>
+                      <h2 className="text-2xl font-black text-gray-900 leading-tight print:text-black">{viewRekapProposal.judul}</h2>
+                      <p className="text-xs text-gray-500 font-bold mt-2 uppercase tracking-widest">{viewRekapProposal.unit?.nama_unit}</p>
+                   </div>
+                   <button onClick={() => setViewRekapProposal(null)} className="text-gray-300 hover:text-gray-600 text-3xl print:hidden">✕</button>
+                </div>
+
+                <div className="p-8 space-y-8">
+                   {(() => {
+                      const totalCair = viewRekapProposal.details?.reduce((s: number, d: any) => s + Number(d.nominal), 0) || 0;
+                      const allPj = viewRekapProposal.pertanggungjawabans?.filter((pj: any) => pj.status !== 'REJECTED') || [];
+                      const totalReal = allPj.reduce((s: number, pj: any) => s + Number(pj.total_realisasi), 0);
+                      const sisaDana = totalCair - totalReal;
+                      
+                      return (
+                         <>
+                            <div className="grid grid-cols-3 gap-6 text-center">
+                               <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                  <p className="text-[10px] text-gray-500 font-bold uppercase mb-1 tracking-widest">Total Anggaran Cair</p>
+                                  <p className="text-xl font-black text-gray-800">Rp {totalCair.toLocaleString('id-ID')}</p>
+                               </div>
+                               <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
+                                  <p className="text-[10px] text-emerald-600 font-bold uppercase mb-1 tracking-widest">Total Realisasi (Kumulatif)</p>
+                                  <p className="text-xl font-black text-emerald-700">Rp {totalReal.toLocaleString('id-ID')}</p>
+                               </div>
+                               <div className={`${sisaDana > 0 ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'} p-4 rounded-xl border`}>
+                                  <p className={`text-[10px] font-bold uppercase mb-1 tracking-widest ${sisaDana > 0 ? 'text-orange-500' : 'text-blue-500'}`}>
+                                     Sisa Kumulatif
+                                  </p>
+                                  <p className={`text-xl font-black ${sisaDana > 0 ? 'text-orange-600' : 'text-blue-600'}`}>
+                                     Rp {sisaDana.toLocaleString('id-ID')}
+                                  </p>
+                               </div>
+                            </div>
+
+                            <div>
+                               <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Daftar Nota Realisasi Terkait Usulan Ini:</p>
+                               {allPj.length === 0 ? (
+                                  <p className="text-sm text-gray-400 italic">Belum ada nota yang dilaporkan.</p>
+                               ) : (
+                                  <div className="border border-gray-200 rounded-2xl overflow-hidden">
+                                     <table className="w-full text-sm">
+                                        <thead className="bg-gray-100 text-[10px] font-black uppercase text-gray-500 border-b border-gray-200">
+                                           <tr>
+                                              <th className="px-5 py-3 text-left w-24">Tgl Lapor</th>
+                                              <th className="px-5 py-3 text-left">Ringkasan & Rincian Nota</th>
+                                              <th className="px-5 py-3 text-right w-36">Realisasi (Rp)</th>
+                                              <th className="px-5 py-3 text-center w-24 print:hidden">Status</th>
+                                           </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
+                                           {allPj.map((pj: any, i: number) => (
+                                              <tr key={i} className="hover:bg-gray-50 align-top">
+                                                 <td className="px-5 py-3 whitespace-nowrap text-xs text-gray-500">{new Date(pj.tanggal_laporan).toLocaleDateString('id-ID')}</td>
+                                                 <td className="px-5 py-3">
+                                                    <p className="text-xs text-gray-700 font-semibold mb-2">{pj.ringkasan}</p>
+                                                    {pj.details && pj.details.length > 0 && (
+                                                       <div className="bg-gray-50 rounded-lg border border-gray-100 overflow-hidden">
+                                                          <table className="w-full text-[11px]">
+                                                             <tbody className="divide-y divide-gray-100">
+                                                                {pj.details.map((det: any, j: number) => (
+                                                                   <tr key={j}>
+                                                                      <td className="px-3 py-1.5 text-gray-500">{det.account?.nomor ? `[${det.account.nomor}]` : ''} {det.keterangan || 'Item'}</td>
+                                                                      <td className="px-3 py-1.5 text-right font-mono font-bold text-gray-700 whitespace-nowrap">Rp {Number(det.nominal).toLocaleString('id-ID')}</td>
+                                                                   </tr>
+                                                                ))}
+                                                             </tbody>
+                                                          </table>
+                                                       </div>
+                                                    )}
+                                                 </td>
+                                                 <td className="px-5 py-3 text-right font-black text-emerald-600 whitespace-nowrap">Rp {Number(pj.total_realisasi).toLocaleString('id-ID')}</td>
+                                                 <td className="px-5 py-3 text-center print:hidden">
+                                                    <span className={`px-2 py-1 rounded text-[10px] font-bold ${pj.status === 'APPROVED_FINAL' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                       {pj.status === 'APPROVED_FINAL' ? 'SELESAI' : 'DRAFT'}
+                                                    </span>
+                                                 </td>
+                                              </tr>
+                                           ))}
+                                        </tbody>
+                                        <tfoot className="bg-blue-900 text-white print:bg-gray-100 print:text-black">
+                                           <tr>
+                                              <td colSpan={2} className="px-5 py-3 text-right text-xs uppercase font-bold tracking-widest opacity-80 print:text-gray-600">Total Pengeluaran SPJ Kumulatif:</td>
+                                              <td className="px-5 py-3 text-right font-black text-lg text-emerald-300 shadow-inner tracking-tight print:text-black">Rp {totalReal.toLocaleString('id-ID')}</td>
+                                              <td className="print:hidden"></td>
+                                           </tr>
+                                        </tfoot>
+                                     </table>
+                                  </div>
+                               )}
+                            </div>
+                         </>
+                      );
+                   })()}
+                </div>
+
+                <div className="p-6 bg-gray-50 border-t rounded-b-3xl flex justify-between print:hidden">
+                   <button 
+                     onClick={() => window.print()} 
+                     className="bg-white text-purple-700 border-2 border-purple-200 px-6 py-2 rounded-xl font-black text-sm hover:bg-purple-50 transition-all font-mono"
+                   >
+                     🚀 Cetak Buku Rekap Usulan (PDF)
+                   </button>
+                   <button onClick={() => setViewRekapProposal(null)} className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-bold">Tutup Lembar Rekap</button>
+                </div>
+             </div>
+          </div>
+       )}
     </div>
   );
 }

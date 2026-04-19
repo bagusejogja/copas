@@ -5,6 +5,7 @@ export default function SPJApprovalPage() {
   const [lpjs, setLpjs] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
   
   // Filters
@@ -20,13 +21,17 @@ export default function SPJApprovalPage() {
       const query = new URLSearchParams();
       if (filterUnit) query.set('unit_id', filterUnit);
 
-      const [resLpj, resUnits] = await Promise.all([
+      const [resLpj, resUnits, resMe] = await Promise.all([
         fetch('/api/pertanggungjawaban/approve?' + query.toString()),
-        fetch('/api/units')
+        fetch('/api/units'),
+        fetch('/api/auth/me')
       ]);
       
       const dataLpj = await resLpj.json();
       const dataUnits = await resUnits.json();
+      const dataMe = await resMe.json();
+      setUser(dataMe);
+      
       
       setLpjs(Array.isArray(dataLpj) ? dataLpj : []);
       setUnits(Array.isArray(dataUnits) ? dataUnits : []);
@@ -57,7 +62,8 @@ export default function SPJApprovalPage() {
       </div>
 
       {/* FILTER PANEL */}
-      <div className="mb-6 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
+      {(user?.role?.level === 99 || user?.unit?.id === 1) && (
+        <div className="mb-6 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
           <div className="flex-1">
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Filter Majelis / Unit</label>
             <select 
@@ -79,7 +85,8 @@ export default function SPJApprovalPage() {
               ✕ Reset
             </button>
           )}
-      </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
         {loading ? (

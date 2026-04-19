@@ -56,10 +56,22 @@ export async function PUT(
 
     // Update proposal and rebuild details
     const proposal = await prisma.$transaction(async (tx) => {
-      // Delete old details
+      // 1. Delete old details
       await tx.proposalDetail.deleteMany({ where: { proposal_id: p_id } });
 
-      // Update proposal
+      // 2. Determine initial status (Check if we should skip the first step in flow)
+      let targetStatus = 'PENDING';
+      const flows = await tx.approvalFlow.findMany({
+        where: { is_active: true },
+        orderBy: { urutan: 'asc' }
+      });
+      
+      if (flows.length > 0 && flows[0].role_id === payload.role.id) {
+         // Auto-advance since the editor is the first approver
+         targetStatus = flows.length > 1 ? `APPROVED_STEP_${flows[0].id}` : 'APPROVED_FINAL';
+      }
+
+      // 3. Update proposal
       return await tx.proposal.update({
         where: { id: p_id },
         data: {
@@ -76,11 +88,11 @@ export async function PUT(
           tanggal_selesai: tanggal_selesai ? new Date(tanggal_selesai) : null,
           tempat,
           susunan_panitia,
-          status_terakhir: 'PENDING', // Reset status as it's resubmitted
+          status_terakhir: targetStatus,
           details: {
             create: details.map((d: any) => ({
-               expense_reference_id: Number(d.expense_reference_id || d.expense_reference.id),
-               account_id: Number(d.account_id || d.account.id),
+               expense_reference_id: Number(d.expense_reference_id || d.expense_reference?.id),
+               account_id: Number(d.account_id || d.account?.id),
                deskripsi: d.deskripsi,
                nominal: Number(d.nominal)
             }))

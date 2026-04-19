@@ -1,176 +1,226 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-type Unit = { id: number; nama_unit: string; parent_unit_id: number | null; parent_unit: { nama_unit: string } | null };
+type UnitNode = {
+  id: number;
+  nama_unit: string;
+  nama_unit_pendek: string | null;
+  pemerhati: string | null;
+  tipe: string;
+  parent_unit_id: number | null;
+  _count?: { child_units: number; users: number; proposals: number; programKerjas: number };
+  children: UnitNode[];
+};
 
-export default function UnitsPage() {
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [loading, setLoading] = useState(false);
-  
-  // form state
-  const [namaUnit, setNamaUnit] = useState('');
-  const [namaUnitPendek, setNamaUnitPendek] = useState('');
-  const [pemerhati, setPemerhati] = useState('');
-  const [parentUnitId, setParentUnitId] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const EMPTY_FORM = { nama_unit: '', nama_unit_pendek: '', pemerhati: '', tipe: 'UNIT', parent_unit_id: '' };
 
-  useEffect(() => {
-    fetchUnits();
-  }, []);
-
-  const fetchUnits = async () => {
-    setLoading(true);
-    const res = await fetch('/api/units');
-    const data = await res.json();
-    setUnits(data);
-    setLoading(false);
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/units', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-           nama_unit: namaUnit,
-           nama_unit_pendek: namaUnitPendek || null,
-           pemerhati: pemerhati || null,
-           parent_unit_id: parentUnitId || null 
-        })
-      });
-      if (res.ok) {
-        setNamaUnit('');
-        setNamaUnitPendek('');
-        setPemerhati('');
-        setParentUnitId('');
-        fetchUnits();
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+function TreeNode({ node, level, allFlat, onEdit, onAddChild, expandedIds, toggleExpand }: {
+  node: UnitNode; level: number; allFlat: UnitNode[];
+  onEdit: (u: UnitNode) => void; onAddChild: (parentId: number) => void;
+  expandedIds: Set<number>; toggleExpand: (id: number) => void;
+}) {
+  const hasChildren = node.children && node.children.length > 0;
+  const isExpanded = expandedIds.has(node.id);
+  const isGroup = node.tipe === 'GROUP';
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex justify-between items-center border-b pb-4">
+    <div>
+      <div
+        className={`flex items-center gap-2 py-2.5 px-3 rounded-xl transition-all hover:bg-gray-50 group ${level === 0 ? 'bg-emerald-50/50 border border-emerald-100' : ''}`}
+        style={{ marginLeft: `${level * 24}px` }}
+      >
+        <button
+          onClick={() => toggleExpand(node.id)}
+          className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 transition-all ${hasChildren ? 'bg-gray-200 text-gray-600 hover:bg-gray-300' : 'bg-transparent text-gray-200 cursor-default'}`}
+          disabled={!hasChildren}
+        >
+          {hasChildren ? (isExpanded ? '▾' : '▸') : '·'}
+        </button>
+        <span className="text-lg shrink-0">
+          {isGroup ? '📁' : (level === 0 ? '🏛️' : '🏢')}
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className={`font-bold text-gray-800 truncate ${level === 0 ? 'text-base' : 'text-sm'}`}>{node.nama_unit}</p>
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${isGroup ? 'bg-purple-100 text-purple-600' : 'bg-blue-50 text-blue-500'}`}>
+              {node.tipe}
+            </span>
+            {node.nama_unit_pendek && (
+              <span className="text-[10px] text-gray-400 font-mono shrink-0">({node.nama_unit_pendek})</span>
+            )}
+          </div>
+          {node._count && (
+            <div className="flex gap-3 mt-0.5">
+              {node._count.child_units > 0 && <span className="text-[9px] text-gray-400">{node._count.child_units} sub-unit</span>}
+              {node._count.users > 0 && <span className="text-[9px] text-gray-400">{node._count.users} user</span>}
+              {node._count.proposals > 0 && <span className="text-[9px] text-emerald-500">{node._count.proposals} usulan</span>}
+              {node._count.programKerjas > 0 && <span className="text-[9px] text-blue-500">{node._count.programKerjas} proker</span>}
+            </div>
+          )}
+        </div>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <button onClick={() => onAddChild(node.id)} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg font-bold hover:bg-emerald-100 transition">+ Anak</button>
+          <button onClick={() => onEdit(node)} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-lg font-bold hover:bg-blue-100 transition">✎ Edit</button>
+        </div>
+      </div>
+      {hasChildren && isExpanded && (
+        <div className="border-l-2 border-dashed border-gray-200 ml-6">
+          {node.children.map(child => (
+            <TreeNode key={child.id} node={child} level={level + 1} allFlat={allFlat} onEdit={onEdit} onAddChild={onAddChild} expandedIds={expandedIds} toggleExpand={toggleExpand} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function UnitsPage() {
+  const [tree, setTree] = useState<UnitNode[]>([]);
+  const [flatUnits, setFlatUnits] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [resTree, resFlat] = await Promise.all([
+        fetch('/api/units?format=tree'),
+        fetch('/api/units')
+      ]);
+      const dataTree = await resTree.json();
+      const dataFlat = await resFlat.json();
+      setTree(Array.isArray(dataTree) ? dataTree : []);
+      setFlatUnits(Array.isArray(dataFlat) ? dataFlat : []);
+      const ids = new Set<number>();
+      (Array.isArray(dataFlat) ? dataFlat : []).forEach((u: any) => {
+        if (u.parent_unit_id === null || u.parent_unit_id === 1) ids.add(u.id);
+      });
+      if (dataFlat?.[0]?.id) ids.add(dataFlat[0].id);
+      setExpandedIds(prev => new Set([...prev, ...ids]));
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  };
+  const expandAll = () => setExpandedIds(new Set(flatUnits.map(u => u.id)));
+  const collapseAll = () => setExpandedIds(new Set());
+
+  const openAddChild = (parentId: number) => {
+    setEditId(null); setForm({ ...EMPTY_FORM, parent_unit_id: String(parentId) }); setShowForm(true);
+  };
+  const openEdit = (unit: UnitNode) => {
+    setEditId(unit.id);
+    setForm({ nama_unit: unit.nama_unit, nama_unit_pendek: unit.nama_unit_pendek || '', pemerhati: unit.pemerhati || '', tipe: unit.tipe, parent_unit_id: unit.parent_unit_id ? String(unit.parent_unit_id) : '' });
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.nama_unit.trim()) { alert('Nama unit wajib diisi.'); return; }
+    setSaving(true);
+    try {
+      const payload = { ...(editId ? { id: editId } : {}), nama_unit: form.nama_unit, nama_unit_pendek: form.nama_unit_pendek || null, pemerhati: form.pemerhati || null, tipe: form.tipe, parent_unit_id: form.parent_unit_id ? Number(form.parent_unit_id) : null };
+      const res = await fetch('/api/units', { method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (res.ok) { setShowForm(false); setEditId(null); setForm(EMPTY_FORM); fetchData(); }
+      else { const err = await res.json(); alert(err.message || 'Gagal menyimpan'); }
+    } finally { setSaving(false); }
+  };
+
+  const parentName = form.parent_unit_id ? flatUnits.find(u => u.id === Number(form.parent_unit_id))?.nama_unit || '-' : '(Root / Tidak Ada Induk)';
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto pb-20">
+      <div className="mb-8 flex justify-between items-end border-b pb-4">
         <div>
-           <h1 className="text-2xl font-bold text-gray-800">Data Unit Kerja / Majelis</h1>
-           <p className="mt-1 text-gray-600 text-sm">Kelola struktur hierarki unit dalam organisasi.</p>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Manajemen Unit</h1>
+          <p className="mt-1 text-gray-500 text-sm font-medium italic">Struktur Organisasi Berjenjang (Hierarki)</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={expandAll} className="text-[10px] px-3 py-2 bg-gray-100 rounded-lg font-bold text-gray-600 hover:bg-gray-200">⬇ Buka Semua</button>
+          <button onClick={collapseAll} className="text-[10px] px-3 py-2 bg-gray-100 rounded-lg font-bold text-gray-600 hover:bg-gray-200">⬆ Tutup Semua</button>
+          <button onClick={() => { setEditId(null); setForm(EMPTY_FORM); setShowForm(true); }} className="bg-muh-green text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg hover:bg-muh-green-dark transition-all">+ Unit Baru</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Form Tambah Unit */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-1 h-fit">
-           <h3 className="font-semibold text-lg text-gray-800 border-b pb-3 mb-4">Tambah Unit Baru</h3>
-           <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Unit/Majelis <span className="text-red-500">*</span></label>
-                <input 
-                  required
-                  type="text" 
-                  value={namaUnit}
-                  onChange={e => setNamaUnit(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-muh-green focus:border-muh-green text-sm"
-                  placeholder="Contoh: Majelis Tabligh Kota"
-                />
-              </div>
+      <div className="mb-6 flex gap-4 items-center text-[10px]">
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-purple-100 rounded"></span> <b className="text-purple-600">GROUP</b> = Folder/Pengelompokan (tidak punya anggaran)</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-blue-50 rounded"></span> <b className="text-blue-500">UNIT</b> = Unit Operasional (punya anggaran & proker)</span>
+      </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Singkatan / Nama Pendek <span className="text-gray-400">(Opsional)</span></label>
-                <input 
-                  type="text" 
-                  value={namaUnitPendek}
-                  onChange={e => setNamaUnitPendek(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-muh-green focus:border-muh-green text-sm"
-                  placeholder="Contoh: MT"
-                />
-              </div>
+      <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-6">
+        {loading ? (
+          <div className="flex items-center justify-center p-16 gap-3">
+            <div className="w-6 h-6 border-2 border-muh-green/30 border-t-muh-green rounded-full animate-spin"></div>
+            <span className="text-gray-500 text-sm">Memuat pohon organisasi...</span>
+          </div>
+        ) : tree.length === 0 ? (
+          <div className="p-16 text-center">
+            <div className="text-5xl mb-4">🏗️</div>
+            <p className="text-gray-700 font-bold text-lg">Belum ada unit terdaftar.</p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {tree.map(node => (
+              <TreeNode key={node.id} node={node} level={0} allFlat={flatUnits} onEdit={openEdit} onAddChild={openAddChild} expandedIds={expandedIds} toggleExpand={toggleExpand} />
+            ))}
+          </div>
+        )}
+      </div>
 
+      {showForm && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden stagger-fade-in">
+            <div className="p-6 border-b bg-blue-900 text-white">
+              <h3 className="font-bold text-lg">{editId ? '✎ Edit Unit' : '+ Tambah Unit Baru'}</h3>
+              <p className="text-xs text-white/60 mt-1">Induk: <span className="text-yellow-300 font-bold">{parentName}</span></p>
+            </div>
+            <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Pemerhati <span className="text-gray-400">(Opsional)</span></label>
-                <input 
-                  type="text" 
-                  value={pemerhati}
-                  onChange={e => setPemerhati(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-muh-green focus:border-muh-green text-sm"
-                  placeholder="Nama Pemerhati Unit"
-                />
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Nama Unit *</label>
+                <input value={form.nama_unit} onChange={e => setForm({ ...form, nama_unit: e.target.value })} type="text" placeholder="Misal: SDM Suronatan" className="w-full border-gray-200 rounded-xl p-3 text-sm focus:ring-muh-green" />
               </div>
-              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Singkatan</label>
+                  <input value={form.nama_unit_pendek} onChange={e => setForm({ ...form, nama_unit_pendek: e.target.value })} type="text" placeholder="SDM-SR" className="w-full border-gray-200 rounded-xl p-3 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Tipe Unit *</label>
+                  <select value={form.tipe} onChange={e => setForm({ ...form, tipe: e.target.value })} className="w-full border-gray-200 rounded-xl p-3 text-sm font-bold">
+                    <option value="UNIT">🏢 UNIT (Operasional)</option>
+                    <option value="GROUP">📁 GROUP (Folder)</option>
+                  </select>
+                </div>
+              </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Induk Unit (Opsional)</label>
-                <select 
-                  value={parentUnitId}
-                  onChange={e => setParentUnitId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-muh-green focus:border-muh-green text-sm outline-none"
-                >
-                  <option value="">-- Tidak Ada Induk (Pusat / Teratas) --</option>
-                  {units.map(u => (
-                    <option key={u.id} value={u.id}>{u.nama_unit}</option>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Induk (Parent)</label>
+                <select value={form.parent_unit_id} onChange={e => setForm({ ...form, parent_unit_id: e.target.value })} className="w-full border-gray-200 rounded-xl p-3 text-sm">
+                  <option value="">-- Tidak Ada Induk (Root) --</option>
+                  {flatUnits.filter(u => u.id !== editId).map(u => (
+                    <option key={u.id} value={u.id}>{u.parent_unit?.nama_unit ? `${u.parent_unit.nama_unit} → ` : ''}{u.nama_unit} [{u.tipe}]</option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-1">Gunakan ini jika unit tersebut berada di bawah unit lain secara struktur.</p>
               </div>
-
-              <div className="pt-2">
-                 <button 
-                   type="submit" 
-                   disabled={isSubmitting}
-                   className={`w-full bg-muh-green text-white font-medium rounded-lg py-2.5 hover:bg-muh-green-dark transition flex justify-center items-center ${isSubmitting ? 'opacity-70' : ''}`}
-                 >
-                   {isSubmitting ? 'Menyimpan...' : 'Simpan Unit'}
-                 </button>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Pemerhati</label>
+                <input value={form.pemerhati} onChange={e => setForm({ ...form, pemerhati: e.target.value })} type="text" placeholder="Nama Pemerhati (Opsional)" className="w-full border-gray-200 rounded-xl p-3 text-sm" />
               </div>
-           </form>
+            </div>
+            <div className="p-6 bg-gray-50 border-t flex gap-3">
+              <button onClick={() => { setShowForm(false); setEditId(null); setForm(EMPTY_FORM); }} className="flex-1 px-4 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-200">Batal</button>
+              <button onClick={handleSave} disabled={saving} className="flex-[2] bg-blue-600 text-white px-4 py-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all">
+                {saving ? 'Menyimpan...' : (editId ? 'Simpan Perubahan' : '+ Tambah Unit')}
+              </button>
+            </div>
+          </div>
         </div>
-
-        {/* Tabel Daftar Unit */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 lg:col-span-2 overflow-hidden">
-           {loading ? (
-             <div className="p-8 text-center text-gray-500">Memuat data unit...</div>
-           ) : (
-             <div className="overflow-x-auto">
-               <table className="w-full text-sm text-left text-gray-600">
-                 <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b">
-                   <tr>
-                     <th className="px-6 py-4 w-16 text-center">ID</th>
-                     <th className="px-6 py-4">Nama Unit</th>
-                     <th className="px-6 py-4">Singkatan</th>
-                     <th className="px-6 py-4">Pemerhati</th>
-                     <th className="px-6 py-4">Induk (Parent Unit)</th>
-                   </tr>
-                 </thead>
-                 <tbody className="divide-y">
-                    {units.length === 0 ? (
-                       <tr><td colSpan={5} className="px-6 py-4 text-center">Belum ada data unit.</td></tr>
-                    ) : units.map((u: any) => (
-                      <tr key={u.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-center font-medium">{u.id}</td>
-                        <td className="px-6 py-4 font-bold text-gray-800">{u.nama_unit}</td>
-                        <td className="px-6 py-4 text-gray-600">{u.nama_unit_pendek || '-'}</td>
-                        <td className="px-6 py-4 text-gray-600">{u.pemerhati || '-'}</td>
-                        <td className="px-6 py-4">
-                           {u.parent_unit ? (
-                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                               {u.parent_unit.nama_unit}
-                             </span>
-                           ) : (
-                             <span className="text-gray-400 italic text-xs">Pusat / Teratas</span>
-                           )}
-                        </td>
-                      </tr>
-                    ))}
-                 </tbody>
-               </table>
-             </div>
-           )}
-        </div>
-
-      </div>
+      )}
     </div>
   );
 }

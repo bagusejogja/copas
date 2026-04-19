@@ -2,6 +2,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import MiniEditor from '@/components/MiniEditor';
 
 function EditForm() {
   const router = useRouter();
@@ -209,6 +210,26 @@ function EditForm() {
                     <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Tgl Selesai</label>
                     <input required type="date" value={tglSelesai} onChange={e => setTglSelesai(e.target.value)} className="w-full border-gray-200 rounded-xl p-3" />
                  </div>
+              </div>
+            </div>
+
+            {/* Narasi & WYSIWYG */}
+            <div className="grid grid-cols-1 gap-6 mt-6">
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Latar Belakang & Rasionalitas</label>
+                <textarea value={latar} onChange={e => setLatar(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 focus:ring-muh-green font-medium" rows={3} placeholder="Jelaskan alasan pengadaan..."></textarea>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Tujuan & Sasaran</label>
+                <textarea value={tujuan} onChange={e => setTujuan(e.target.value)} className="w-full border-gray-200 rounded-xl p-3 focus:ring-muh-green font-medium" rows={2}></textarea>
+              </div>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Susunan Panitia</label>
+                <MiniEditor value={panitia} onChange={setPanitia} placeholder="Ketik susunan kepanitiaan, gunakan toolbar untuk daftar bernomor..." />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Kebutuhan Peralatan / Sarana</label>
+                <MiniEditor value={peralatan} onChange={setPeralatan} placeholder="Ketik kebutuhan alat/sarana kegiatan..." />
               </div>
             </div>
          </div>

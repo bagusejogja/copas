@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 type Flow = { id: number; urutan: number; label: string; is_active: boolean; role: { id: number; nama_jabatan: string; level: number } };
 type Role = { id: number; nama_jabatan: string; level: number };
@@ -13,6 +14,8 @@ export default function ApprovalFlowPage() {
   const [roleId, setRoleId] = useState('');
   const [urutan, setUrutan] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -77,11 +80,24 @@ export default function ApprovalFlowPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Jabatan Penyetuju *</label>
-              <select required value={roleId} onChange={e => setRoleId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white">
-                <option value="">-- Pilih Jabatan --</option>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.nama_jabatan} (Level {r.level})</option>)}
-              </select>
+              {isMounted && (
+                <Select
+                  instanceId="approval-flow-role-select"
+                  placeholder="Cari Jabatan..."
+                  options={roles.map(r => ({ value: r.id, label: `${r.nama_jabatan} (Level ${r.level})` }))}
+                  value={roleId ? { value: Number(roleId), label: roles.find(r => r.id === Number(roleId))?.nama_jabatan + ` (Level ${roles.find(r => r.id === Number(roleId))?.level})` } : null}
+                  onChange={(val: any) => setRoleId(val ? String(val.value) : '')}
+                  className="text-sm"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      borderRadius: '0.5rem',
+                      borderColor: '#d1d5db',
+                      padding: '1px'
+                    })
+                  }}
+                />
+              )}
             </div>
             <button type="submit" disabled={submitting}
               className="w-full bg-muh-green text-white font-bold py-2.5 rounded-lg hover:bg-muh-green-dark transition">

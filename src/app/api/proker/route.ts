@@ -35,7 +35,10 @@ export async function GET(req: NextRequest) {
         proposals: {
           select: {
             id: true,
+            judul: true,
             status_terakhir: true,
+            tanggal: true,
+            tanggal_bayar: true,
             details: { select: { nominal: true } },
             pertanggungjawabans: true
           }

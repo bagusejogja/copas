@@ -23,6 +23,8 @@ export default function ProkerPage() {
   const [submitting, setSubmitting] = useState(false);
   const [detailItem, setDetailItem] = useState<any | null>(null);
   const [settings, setSettings] = useState<any>({});
+  const [allUnits, setAllUnits] = useState<any[]>([]); // To store /api/pagu
+  const [isInit, setIsInit] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showExport, setShowExport] = useState(false);
   const [exportForm, setExportForm] = useState({ 
@@ -47,21 +49,32 @@ export default function ProkerPage() {
     }
   }, [showExport, prokerList, user]);
 
-  const fetchData = async () => {
+  const fetchData = async (forceYear?: string) => {
     setLoading(true);
     try {
-      const [resPk, resSet, resMe] = await Promise.all([
-        fetch(`/api/proker?tahun=${tahunFilter}`),
+      const activeYear = forceYear || tahunFilter;
+      const [resPk, resSet, resMe, resPagu] = await Promise.all([
+        fetch(`/api/proker?tahun=${activeYear}`),
         fetch('/api/settings'),
-        fetch('/api/auth/me')
+        fetch('/api/auth/me'),
+        fetch('/api/pagu')
       ]);
       const dPk = await resPk.json();
       const dSet = await resSet.json();
       const dMe = await resMe.json();
+      const dPagu = await resPagu.json();
       
       setProkerList(Array.isArray(dPk) ? dPk : []);
       setSettings(dSet);
       setUser(dMe);
+      setAllUnits(Array.isArray(dPagu) ? dPagu : []);
+
+      if (!isInit) {
+        if (dSet.tahun_anggaran_aktif && dSet.tahun_anggaran_aktif !== tahunFilter) {
+          setTahunFilter(dSet.tahun_anggaran_aktif);
+        }
+        setIsInit(true);
+      }
     } finally { setLoading(false); }
   };
 
@@ -87,7 +100,13 @@ export default function ProkerPage() {
     return true;
   };
 
-  useEffect(() => { fetchData(); }, [tahunFilter]);
+  useEffect(() => { 
+    if (isInit) {
+      fetchData(); 
+    } else {
+      fetchData(); // first fetch handles isInit
+    }
+  }, [tahunFilter]);
 
   const handleChange = (e: any) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -324,10 +343,21 @@ export default function ProkerPage() {
 
   const getGlobalUnitStats = () => {
     const totalAnggaran = prokerList.reduce((sum, pk) => sum + Number(pk.anggaran_setahun), 0);
-    const isGlobal = user?.role?.nama === 'Super Admin' || user?.role?.nama === 'PDMK';
-    const unit = prokerList.length > 0 ? prokerList[0].unit : user?.unit;
-    const currentPaguRecord = unit?.paguRecords?.find((r: any) => r.tahun === Number(tahunFilter));
-    const paguUnit = currentPaguRecord ? Number(currentPaguRecord.nominal) : 0;
+    const isGlobal = user?.role?.nama === 'Super Admin' || user?.role?.nama === 'PDMK' || user?.unit?.is_pusat === true;
+    
+    let paguUnit = 0;
+    if (isGlobal && allUnits.length > 0) {
+      // Sum ALL pagus for all units for the active year
+      paguUnit = allUnits.reduce((acc, u) => {
+        const pagunya = u.paguRecords?.find((r: any) => r.tahun === Number(tahunFilter));
+        return acc + (pagunya ? Number(pagunya.nominal) : 0);
+      }, 0);
+    } else {
+      const unit = prokerList.length > 0 ? prokerList[0].unit : user?.unit;
+      const currentPaguRecord = unit?.paguRecords?.find((r: any) => r.tahun === Number(tahunFilter));
+      paguUnit = currentPaguRecord ? Number(currentPaguRecord.nominal) : 0;
+    }
+
     const sisaPagu = paguUnit - totalAnggaran;
     const usagePct = paguUnit > 0 ? Math.min(100, Math.round((totalAnggaran / paguUnit) * 100)) : 0;
 
@@ -336,7 +366,7 @@ export default function ProkerPage() {
       paguUnit, 
       sisaPagu, 
       usagePct, 
-      unitName: isGlobal ? 'Seluruh Unit (Gabungan)' : (unit?.nama_unit || 'Unit') 
+      unitName: isGlobal ? 'Seluruh Unit (Gabungan)' : (user?.unit?.nama_unit || 'Unit') 
     };
   };
 
@@ -474,10 +504,83 @@ export default function ProkerPage() {
                     {detailItem.strategi && <div><p className="text-xs text-gray-500 font-semibold uppercase mb-1">Strategi</p><p className="text-sm whitespace-pre-line bg-gray-50 p-3 rounded-lg">{detailItem.strategi}</p></div>}
                     {detailItem.indikator && <div><p className="text-xs text-gray-500 font-semibold uppercase mb-1">Indikator Ketercapaian</p><p className="text-sm whitespace-pre-line bg-gray-50 p-3 rounded-lg">{detailItem.indikator}</p></div>}
                     <div>
-                      <p className="text-xs text-gray-500 font-semibold uppercase mb-2">Usulan Anggaran Terkait ({stats.jumlahProposal})</p>
-                      {stats.jumlahProposal === 0 ? <p className="text-sm text-gray-400">Belum ada usulan yang dikaitkan.</p> : (
-                        <Link href="/dashboard/proposals" className="text-sm text-blue-600 hover:underline">Lihat daftar usulan →</Link>
-                      )}
+                      <p className="text-xs text-gray-500 font-semibold uppercase mb-2">Buku Besar Keuangan (Ledger)</p>
+                      {(() => {
+                        let ledger: any[] = [];
+                        (detailItem.proposals || []).forEach((p: any) => {
+                          if (p.status_terakhir !== 'DRAFT' && p.status_terakhir !== 'REJECTED') {
+                            const disetujui_nominal = p.details.reduce((s:number, d:any) => s + Number(d.nominal), 0);
+                            
+                            if (p.status_terakhir === 'PAID') {
+                              ledger.push({
+                                tanggal: p.tanggal_bayar || p.tanggal,
+                                deskripsi: `Pencairan: ${p.judul}`,
+                                masuk: disetujui_nominal,
+                                keluar: 0
+                              });
+                            }
+
+                            p.pertanggungjawabans?.forEach((lpj: any) => {
+                              if (lpj.status === 'APPROVED_FINAL') {
+                                ledger.push({
+                                  tanggal: lpj.tanggal_laporan,
+                                  deskripsi: `Realisasi SPJ: ${lpj.ringkasan || p.judul}`,
+                                  masuk: 0,
+                                  keluar: Number(lpj.total_realisasi)
+                                });
+                                
+                                if (lpj.opsi_sisa === 'KEMBALI' && Number(lpj.sisa_dana) > 0) {
+                                  ledger.push({
+                                    tanggal: lpj.tanggal_laporan,
+                                    deskripsi: `Pengembalian Sisa SPJ: ${p.judul}`,
+                                    masuk: 0,
+                                    keluar: Number(lpj.sisa_dana)
+                                  });
+                                }
+                              }
+                            });
+                          }
+                        });
+                        
+                        ledger.sort((a,b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
+                        
+                        let saldo = 0;
+                        if (ledger.length === 0) return <p className="text-sm text-gray-400 italic bg-gray-50 p-4 rounded-xl text-center">Belum ada mutasi keuangan aktif.</p>;
+
+                        return (
+                          <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                            <table className="w-full text-xs">
+                              <thead className="bg-gray-100 text-gray-500 font-bold uppercase tracking-wider">
+                                <tr>
+                                  <th className="px-3 py-2 text-left w-24">Tanggal</th>
+                                  <th className="px-3 py-2 text-left">Keterangan</th>
+                                  <th className="px-3 py-2 text-right text-emerald-600">Masuk</th>
+                                  <th className="px-3 py-2 text-right text-red-500">Keluar</th>
+                                  <th className="px-3 py-2 text-right text-blue-700">Saldo</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 font-mono">
+                                {ledger.map((l, i) => {
+                                  saldo += l.masuk - l.keluar;
+                                  return (
+                                    <tr key={i} className="hover:bg-gray-50 border-b last:border-0 border-gray-50">
+                                      <td className="px-3 py-2.5 whitespace-nowrap text-gray-500">
+                                        {l.tanggal ? new Date(l.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+                                      </td>
+                                      <td className="px-3 py-2.5 font-sans font-medium text-gray-800">
+                                        {l.deskripsi || '-'}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-right text-emerald-600 font-bold">{l.masuk > 0 ? fmt(l.masuk) : '-'}</td>
+                                      <td className="px-3 py-2.5 text-right text-red-500">{l.keluar > 0 ? fmt(l.keluar) : '-'}</td>
+                                      <td className="px-3 py-2.5 text-right text-blue-700 font-black">{fmt(saldo)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </>
                 );
@@ -618,7 +721,7 @@ export default function ProkerPage() {
              <div className={`p-6 rounded-2xl shadow-sm border-2 flex items-center gap-4 ${gStats.sisaPagu < 0 ? 'bg-red-50 border-red-100' : 'bg-gray-900 border-gray-800 text-white'}`}>
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${gStats.sisaPagu < 0 ? 'bg-red-100 text-red-600' : 'bg-white/10 text-white'}`}>💰</div>
                 <div>
-                   <p className={`text-[10px] font-black uppercase tracking-widest ${gStats.sisaPagu < 0 ? 'text-red-400' : 'text-white/50'}`}>Sisa Pagu Belum Terbagi</p>
+                   <p className={`text-[10px] font-black uppercase tracking-widest ${gStats.sisaPagu < 0 ? 'text-red-400' : 'text-white/50'}`}>Pagu Yg Blm Direncanakan</p>
                    <p className={`text-xl font-black ${gStats.sisaPagu < 0 ? 'text-red-700' : 'text-white'}`}>{fmt(gStats.sisaPagu)}</p>
                 </div>
              </div>

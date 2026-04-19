@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SI Anggaran - Muhammadiyah',
-  description: 'Sistem Informasi Pengajuan Anggaran Program Kerja',
+  title: 'SIMMUDA Kota Jogja',
+  description: 'Sistem Informasi Manajemen Muhammadiyah Daerah Kota Jogja',
 };
 
 export default function RootLayout({

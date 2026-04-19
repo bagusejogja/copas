@@ -9,29 +9,54 @@ export async function GET(req: NextRequest) {
     userPayload = await verifyToken(token);
   }
 
-  const unit_id = userPayload?.unit?.id;
+  const payload: any = userPayload;
+  const me = await prisma.user.findUnique({
+    where: { id: payload?.id },
+    include: { role: true }
+  });
+  const unit_id = Number(me?.unit_id || -1);
 
-  const whereClause = {
-    is_active: true,
-    OR: [
-      { unit_id: null },
-      { unit_id: unit_id ? Number(unit_id) : -1 }
-    ]
+  // Helper untuk mencari ID yang diaktifkan di MasterVisibility
+  const getVisibleIds = async (type: string) => {
+    const list = await prisma.masterVisibility.findMany({
+      where: { unit_id, reference_type: type, is_active: true },
+      select: { reference_id: true }
+    });
+    const ids = list.map(l => l.reference_id);
+    console.log(`[DEBUG PROPOSAL] Unit: ${unit_id}, Type: ${type}, Found Active IDs:`, ids);
+    return ids;
   };
 
+  const [expIds, actIds, accIds] = await Promise.all([
+    getVisibleIds('expense'),
+    getVisibleIds('activity'),
+    getVisibleIds('account')
+  ]);
+
   const [activities, expenses, accounts, prokers] = await Promise.all([
-    prisma.activityType.findMany({ where: whereClause }),
-    prisma.expenseReference.findMany({ where: whereClause }),
-    prisma.account.findMany({ where: whereClause }),
+    prisma.activityType.findMany({ 
+      where: { 
+        is_active: true,
+        OR: [{ unit_id }, { AND: [{ unit_id: null }, { id: { in: actIds } }] }]
+      } 
+    }),
+    prisma.expenseReference.findMany({ 
+      where: { 
+        is_active: true,
+        OR: [{ unit_id }, { AND: [{ unit_id: null }, { id: { in: expIds } }] }]
+      } 
+    }),
+    prisma.account.findMany({ 
+      where: { 
+        is_active: true,
+        OR: [{ unit_id }, { AND: [{ unit_id: null }, { id: { in: accIds } }] }]
+      } 
+    }),
     prisma.programKerja.findMany({ 
-      where: { unit_id: unit_id ? Number(unit_id) : -1, is_active: true },
+      where: { unit_id, is_active: true },
       include: {
         proposals: {
-           where: {
-             NOT: {
-               status_terakhir: { in: ['DRAFT', 'REJECTED'] }
-             }
-           },
+           where: { NOT: { status_terakhir: { in: ['DRAFT', 'REJECTED'] } } },
            include: { details: true }
         }
       }

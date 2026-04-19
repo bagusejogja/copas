@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     nama: user.nama,
     role: { id: user.role.id, nama: user.role.nama_jabatan, level: user.role.level },
     unit: user.unit,
+    unit_id: Number(user?.unit_id || user?.unit?.id),
     permissions
   });
 }

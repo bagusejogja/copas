@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { getVisibleUnitIds } from '@/lib/unit-hierarchy';
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,8 +17,13 @@ export async function GET(req: NextRequest) {
     // PDM level (Unit ID 1) or Admin (Level 99) can see all
     const isPDM = payload.unit.id === 1 || payload.role.level === 99;
     
-    let baseWhere: any = isPDM ? {} : { unit_id: payload.unit.id };
-    if (filterUnit) baseWhere.unit_id = Number(filterUnit);
+    let baseWhere: any = {};
+    if (filterUnit) {
+      baseWhere.unit_id = Number(filterUnit);
+    } else if (!isPDM) {
+      const visibleIds = await getVisibleUnitIds(payload.unit.id);
+      baseWhere.unit_id = { in: visibleIds };
+    }
 
     const proposals = await prisma.proposal.findMany({
       where: {
@@ -31,7 +37,8 @@ export async function GET(req: NextRequest) {
          },
          activity_type: true,
          unit: true,
-         details: true
+         details: true,
+         proker: { select: { nama_kegiatan: true } }
       },
       orderBy: { id: 'desc' }
     });
